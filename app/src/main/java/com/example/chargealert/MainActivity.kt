@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Prefs.isEnabled(this)) BatteryMonitorService.start(this)
         setContent { ChargeAlertTheme { MainScreen() } }
     }
 }
