@@ -117,10 +117,12 @@ object ChargeScheduler {
         val session = Prefs.Session(now, info.percent, now, info.percent)
         Prefs.setSession(context, session)
         Prefs.setAlertedAt(context, 0L)
+        DebugLog.add(context, "session begin pct=${info.percent} threshold=${Prefs.threshold(context)}")
         process(context, info, session, now, updateLast = false)
     }
 
     private fun endSession(context: Context) {
+        DebugLog.add(context, "session end (not charging)")
         BatteryMonitorService.stop(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
@@ -140,6 +142,7 @@ object ChargeScheduler {
         if (info.percent >= threshold) {
             if (Prefs.alertedAt(context) == 0L) {
                 Prefs.setAlertedAt(context, now)
+                DebugLog.add(context, "THRESHOLD REACHED pct=${info.percent} threshold=$threshold -> alert")
                 learnRate(context, info, session, now)
                 Notifications.alert(context, info.percent)
             }
@@ -231,9 +234,10 @@ object ChargeScheduler {
         // On Android 12+, inexact alarms may be deferred substantially, which can
         // miss a rapidly crossed charge threshold. Use exact while-idle alarms when
         // the user has granted the system's exact-alarm access; retain a safe fallback.
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+        val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
-        ) {
+        DebugLog.add(context, "next alarm in ${delayMs / 1000}s exact=$exact")
+        if (exact) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
                 triggerAt,

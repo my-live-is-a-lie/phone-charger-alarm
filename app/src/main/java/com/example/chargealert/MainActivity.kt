@@ -152,6 +152,8 @@ private fun MainScreen() {
                 }
             }
 
+            DebugLogCard()
+
             if (Build.VERSION.SDK_INT >= 34 && !fullScreenIntentAllowed) {
                 FilledTonalButton(
                     onClick = {

@@ -24,6 +24,7 @@ class BatteryMonitorService : Service() {
     private var receiver: BroadcastReceiver? = null
     private var shownPercent = -1
     private var shownThreshold = -1
+    private var lastLogged = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -32,6 +33,7 @@ class BatteryMonitorService : Service() {
         createMonitorChannel()
 
         val info = BatteryUtils.read(this)
+        DebugLog.add(this, "service created pct=${info.percent} plugged=${info.plugged} enabled=${Prefs.isEnabled(this)}")
         val notification = buildNotification(info.percent)
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(
@@ -54,6 +56,11 @@ class BatteryMonitorService : Service() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action != Intent.ACTION_BATTERY_CHANGED) return
                 val current = BatteryUtils.parse(intent)
+                val tag = "${current.percent}/${current.plugged}"
+                if (tag != lastLogged) {
+                    lastLogged = tag
+                    DebugLog.add(context, "battery event pct=${current.percent} plugged=${current.plugged}")
+                }
                 if (current.plugged) {
                     updateNotification(current.percent)
                     ChargeScheduler.check(context)
@@ -78,6 +85,7 @@ class BatteryMonitorService : Service() {
 
     override fun onDestroy() {
         running = false
+        DebugLog.add(this, "service destroyed")
         receiver?.let { runCatching { unregisterReceiver(it) } }
         receiver = null
         // Make sure the status-bar notification disappears together with the service.
@@ -137,9 +145,11 @@ class BatteryMonitorService : Service() {
             return try {
                 starting = true
                 ContextCompat.startForegroundService(app, Intent(app, BatteryMonitorService::class.java))
+                DebugLog.add(app, "FGS start requested")
                 true
             } catch (e: RuntimeException) {
                 starting = false
+                DebugLog.add(app, "FGS start REFUSED: ${e.javaClass.simpleName}")
                 false
             }
         }

@@ -59,6 +59,15 @@ object Notifications {
 
     fun alert(context: Context, percent: Int) {
         createChannels(context)
+        run {
+            val nm = context.getSystemService(NotificationManager::class.java)
+            val importance = nm.getNotificationChannel(channelId(context))?.importance
+            val fsi = if (android.os.Build.VERSION.SDK_INT >= 34) nm.canUseFullScreenIntent() else true
+            DebugLog.add(
+                context,
+                "alert(): notifsEnabled=${nm.areNotificationsEnabled()} channelImportance=$importance overlay=${Settings.canDrawOverlays(context)} fullScreenIntent=$fsi"
+            )
+        }
         val overlay = overlayIntent(context, percent)
 
         // Always post the notification first. Since Android 15 a background app cannot reliably
@@ -81,7 +90,8 @@ object Notifications {
             .apply { flags = flags or Notification.FLAG_INSISTENT }
         runCatching {
             context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
-        }
+            DebugLog.add(context, "alert notification posted")
+        }.onFailure { DebugLog.add(context, "alert notify FAILED: ${it.javaClass.simpleName}") }
 
         if (Settings.canDrawOverlays(context)) {
             runCatching {
