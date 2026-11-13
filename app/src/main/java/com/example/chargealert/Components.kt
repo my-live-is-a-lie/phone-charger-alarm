@@ -114,7 +114,29 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) settings.updateEnabled(true) }
+    ) { granted ->
+        if (granted) {
+            val exactAllowed = Build.VERSION.SDK_INT < 31 ||
+                context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
+            val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
+                context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
+            when {
+                !exactAllowed -> runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            .setData(Uri.parse("package:${context.packageName}"))
+                    )
+                }
+                !fullScreenAllowed -> runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                            .setData(Uri.parse("package:${context.packageName}"))
+                    )
+                }
+                else -> settings.updateEnabled(true)
+            }
+        }
+    }
 
     return remember(settings) {
         { on: Boolean ->
@@ -126,6 +148,24 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
                 settings.updateEnabled(false)
             } else if (needsPermission) {
                 launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else if (Build.VERSION.SDK_INT >= 31 &&
+                !context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
+            ) {
+                runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            .setData(Uri.parse("package:${context.packageName}"))
+                    )
+                }
+            } else if (Build.VERSION.SDK_INT >= 34 &&
+                !context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
+            ) {
+                runCatching {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                            .setData(Uri.parse("package:${context.packageName}"))
+                    )
+                }
             } else {
                 settings.updateEnabled(true)
             }
