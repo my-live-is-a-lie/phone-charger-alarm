@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 
 /**
@@ -24,9 +25,17 @@ class BatteryMonitorService : Service() {
     private var receiver: BroadcastReceiver? = null
     private var shownPercent = -1
     private var shownThreshold = -1
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
+        runCatching {
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ChargeAlert:MonitorWakeLock")?.apply {
+                setReferenceCounted(false)
+                acquire(12 * 60 * 60 * 1000L)
+            }
+        }
         running = true
         starting = false
         createMonitorChannel()
@@ -78,6 +87,8 @@ class BatteryMonitorService : Service() {
 
     override fun onDestroy() {
         running = false
+        wakeLock?.let { runCatching { if (it.isHeld) it.release() } }
+        wakeLock = null
         receiver?.let { runCatching { unregisterReceiver(it) } }
         receiver = null
         // Make sure the status-bar notification disappears together with the service.

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
@@ -57,7 +58,23 @@ object Notifications {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+
+    fun wakeScreen(context: Context) {
+        runCatching {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            @Suppress("DEPRECATION")
+            val wl = pm?.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                PowerManager.ON_AFTER_RELEASE,
+                "ChargeAlert:AlertScreenWakeLock"
+            )
+            wl?.acquire(15_000L) // Keep screen on for 15 seconds to display the alert
+        }
+    }
+
     fun alert(context: Context, percent: Int) {
+        wakeScreen(context)
         createChannels(context)
         val overlay = overlayIntent(context, percent)
 
