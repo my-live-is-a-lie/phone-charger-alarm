@@ -60,22 +60,12 @@ object Notifications {
     fun alert(context: Context, percent: Int) {
         createChannels(context)
         val overlay = overlayIntent(context, percent)
-        if (Settings.canDrawOverlays(context)) {
-            val launched = runCatching {
-                context.startActivity(
-                    Intent(context, AlertOverlayActivity::class.java)
-                        .putExtra(EXTRA_PERCENT, percent)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                )
-            }.isSuccess
-            if (launched) {
-                // The overlay owns the alert audio; do not also show a heads-up system notification.
-                context.getSystemService(NotificationManager::class.java).cancel(ID_ALERT)
-                return
-            }
-        }
 
-        // Fallback for devices where overlay permission is not available.
+        // Always post the notification first. Since Android 15 a background app cannot reliably
+        // start an activity (even with the overlay permission), and startActivity() does not
+        // throw when the system silently blocks it. The notification (sound + full-screen intent)
+        // is therefore the safety net. AlertOverlayActivity cancels it as soon as it is shown,
+        // so the overlay still owns the audio when it manages to launch.
         val notification = NotificationCompat.Builder(context, channelId(context))
             .setSmallIcon(R.drawable.ic_battery)
             .setContentTitle(context.getString(R.string.alert_title, percent))
@@ -88,7 +78,18 @@ object Notifications {
             .setFullScreenIntent(overlay, true)
             .setContentIntent(overlay)
             .build()
+            .apply { flags = flags or Notification.FLAG_INSISTENT }
         context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
+
+        if (Settings.canDrawOverlays(context)) {
+            runCatching {
+                context.startActivity(
+                    Intent(context, AlertOverlayActivity::class.java)
+                        .putExtra(EXTRA_PERCENT, percent)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
+            }
+        }
     }
 
     fun cancelAlert(context: Context) {
