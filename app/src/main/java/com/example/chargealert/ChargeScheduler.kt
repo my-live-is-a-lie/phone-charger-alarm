@@ -167,12 +167,22 @@ object ChargeScheduler {
             else -> prior
         }.coerceIn(MIN_RATE, MAX_RATE)
         val estimate = remaining * rate
-        val delay = when {
+        val estimateDelay = when {
             estimate <= EXACT_WINDOW -> estimate
             !measured -> minOf(FIRST_MEASURE_MAX, estimate / 2)
             else -> estimate * 8 / 10
         }
-        return delay.coerceIn(MIN_DELAY, MAX_DELAY)
+
+        // Estimates based on a default or stale charging rate can be far too slow near
+        // the target (for example, 72% -> 75% could otherwise sleep for five minutes).
+        // Tighten polling as the target approaches so a faster-than-expected charge is
+        // detected promptly, even before we have enough samples to learn its rate.
+        val proximityLimit = when {
+            remaining <= 5 -> MINUTE
+            remaining <= 10 -> 2 * MINUTE
+            else -> MAX_DELAY
+        }
+        return estimateDelay.coerceIn(MIN_DELAY, minOf(MAX_DELAY, proximityLimit))
     }
 
     private fun learnRate(context: Context, info: BatteryInfo, session: Prefs.Session, now: Long) {
