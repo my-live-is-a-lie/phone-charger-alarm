@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExpandButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -63,6 +64,7 @@ private fun MainScreen() {
     val lifecycleOwner = LocalLifecycleOwner.current
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var tileAdded by remember { mutableStateOf(Prefs.isTileAdded(context)) }
+    var advancedExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -99,6 +101,20 @@ private fun MainScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             ChargeControls(settings, battery, toggle)
+
+            FilledTonalButton(
+                onClick = { advancedExpanded = !advancedExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (advancedExpanded) "إخفاء الإعدادات المتقدمة"
+                    else stringResource(R.string.advanced)
+                )
+            }
+
+            if (advancedExpanded) {
+                AlertSoundSettings()
+            }
 
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,

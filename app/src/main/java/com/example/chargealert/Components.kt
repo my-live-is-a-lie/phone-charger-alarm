@@ -135,7 +135,7 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
 
 
 @Composable
-private fun AlertSoundCard() {
+fun AlertSoundSettings() {
     val context = LocalContext.current
     var selectedUri by remember { mutableStateOf(Prefs.alertSoundUri(context)) }
     val currentUri = selectedUri?.let { Uri.parse(it) }
@@ -168,11 +168,6 @@ private fun AlertSoundCard() {
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = stringResource(R.string.advanced),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
             Text(
                 text = stringResource(R.string.alert_sound_title),
                 style = MaterialTheme.typography.titleMedium,
@@ -214,7 +209,6 @@ fun ChargeControls(
         StatusCard(battery)
         MonitorCard(settings.enabled, onToggle)
         ThresholdCard(settings)
-        AlertSoundCard()
     }
 }
 
