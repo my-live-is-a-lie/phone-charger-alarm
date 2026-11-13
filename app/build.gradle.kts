@@ -16,13 +16,30 @@ android {
         versionName = "1.1"
     }
 
+    signingConfigs {
+        val releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+        if (!releaseStoreFile.isNullOrBlank()) {
+            create("stableRelease") {
+                storeFile = file(releaseStoreFile)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // Temporary CI signing remains debug-key based until a persistent
-            // private release keystore is configured in GitHub Actions secrets.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (!System.getenv("RELEASE_STORE_FILE").isNullOrBlank()) {
+                signingConfigs.getByName("stableRelease")
+            } else {
+                // Temporary fallback for CI until a persistent keystore is added
+                // to GitHub Actions secrets. This key is not suitable for upgrades
+                // across ephemeral GitHub-hosted runners.
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
