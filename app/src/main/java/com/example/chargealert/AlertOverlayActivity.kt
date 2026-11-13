@@ -127,13 +127,6 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "اسحب لأعلى لإغلاق التنبيه",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.94f),
-                fontWeight = FontWeight.SemiBold
-            )
-
             Canvas(
                 modifier = Modifier
                     .size(width = 42.dp, height = 42.dp)
@@ -160,6 +153,13 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
                     style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
                 )
             }
+
+            Text(
+                text = "اسحب لأعلى لإغلاق التنبيه",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.94f),
+                fontWeight = FontWeight.SemiBold
+            )
 
             Surface(
                 modifier = Modifier
