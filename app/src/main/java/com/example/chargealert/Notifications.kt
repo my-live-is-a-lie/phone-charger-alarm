@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
 object Notifications {
@@ -45,13 +46,27 @@ object Notifications {
             0,
             Intent(context, AlertOverlayActivity::class.java)
                 .putExtra(EXTRA_PERCENT, percent)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
     fun alert(context: Context, percent: Int) {
         createChannels(context)
         val overlay = overlayIntent(context, percent)
+
+        // SYSTEM_ALERT_WINDOW grants Android's background-activity-launch exemption.
+        // With this permission, show the custom full-screen capsule over the current app.
+        if (Settings.canDrawOverlays(context)) {
+            runCatching {
+                context.startActivity(
+                    Intent(context, AlertOverlayActivity::class.java)
+                        .putExtra(EXTRA_PERCENT, percent)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
+            }
+        }
+
+        // Keep a notification as a reliable fallback and as the lock-screen entry point.
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERT)
             .setSmallIcon(R.drawable.ic_battery)
             .setContentTitle(context.getString(R.string.alert_title, percent))
