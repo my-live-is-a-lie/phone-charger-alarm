@@ -13,11 +13,16 @@
     <string name="monitor_title">مراقبة الشحن</string>
     <string name="monitor_on">مفعّلة</string>
     <string name="monitor_off">متوقفة</string>
+    <string name="monitor_notification_channel">مراقبة الشحن</string>
+    <string name="monitor_notification_title">مراقبة الشحن مفعّلة</string>
+    <string name="monitor_notification_text">سيظهر تنبيه عند بلوغ النسبة التي اخترتها</string>
     <string name="threshold_title">نسبة التنبيه</string>
     <string name="advanced">الإعدادات المتقدمة</string>
     <string name="tools_title">أدوات</string>
     <string name="test_alert">اختبار التنبيه</string>
     <string name="battery_opt">استثناء من تحسين البطارية</string>
+    <string name="exact_alarm_permission">السماح بالتنبيهات الدقيقة (مهم لوصول التنبيه في وقته)</string>
+    <string name="full_screen_permission">السماح بعرض التنبيه على الشاشة المقفلة</string>
     <string name="add_tile">إضافة البلاطة إلى الإعدادات السريعة</string>
     <string name="overlay_permission_action">السماح بالظهور فوق التطبيقات الأخرى</string>
     <string name="alert_sound_title">نغمة التنبيه</string>
