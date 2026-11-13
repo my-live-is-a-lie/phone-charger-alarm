@@ -102,20 +102,6 @@ private fun MainScreen() {
         ) {
             ChargeControls(settings, battery, toggle)
 
-            FilledTonalButton(
-                onClick = { advancedExpanded = !advancedExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (advancedExpanded) "إخفاء الإعدادات المتقدمة"
-                    else stringResource(R.string.advanced)
-                )
-            }
-
-            if (advancedExpanded) {
-                AlertSoundSettings()
-            }
-
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -157,6 +143,20 @@ private fun MainScreen() {
                         ) { Text(stringResource(R.string.add_tile)) }
                     }
                 }
+            }
+
+            FilledTonalButton(
+                onClick = { advancedExpanded = !advancedExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (advancedExpanded) "إخفاء الإعدادات المتقدمة"
+                    else stringResource(R.string.advanced)
+                )
+            }
+
+            if (advancedExpanded) {
+                AlertSoundSettings()
             }
         }
     }
