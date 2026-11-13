@@ -277,7 +277,7 @@ private fun MonitorCard(enabled: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun ThresholdCard(settings: SettingsState) {
+fun ThresholdCard(settings: SettingsState) {
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.secondaryContainer,

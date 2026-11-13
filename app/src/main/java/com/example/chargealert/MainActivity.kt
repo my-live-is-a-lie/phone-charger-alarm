@@ -15,6 +15,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -66,7 +68,7 @@ private fun MainScreen() {
     var batteryOptimizationExempt by remember {
         mutableStateOf(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
     }
-    var advancedExpanded by remember { mutableStateOf(false) }
+    var showingAdvancedSettings by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -86,12 +88,30 @@ private fun MainScreen() {
     val toggle = rememberToggleAction(settings)
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
+    BackHandler(enabled = showingAdvancedSettings) {
+        showingAdvancedSettings = false
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                subtitle = { Text(stringResource(R.string.main_subtitle)) },
+                title = {
+                    Text(
+                        if (showingAdvancedSettings) stringResource(R.string.advanced)
+                        else stringResource(R.string.app_name)
+                    )
+                },
+                subtitle = {
+                    if (!showingAdvancedSettings) Text(stringResource(R.string.main_subtitle))
+                },
+                navigationIcon = {
+                    if (showingAdvancedSettings) {
+                        TextButton(onClick = { showingAdvancedSettings = false }) {
+                            Text("رجوع")
+                        }
+                    }
+                },
                 scrollBehavior = scrollBehavior
             )
         }
@@ -104,9 +124,20 @@ private fun MainScreen() {
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ChargeControls(settings, battery, toggle)
+            if (showingAdvancedSettings) {
+                ThresholdCard(settings)
+                AlertSoundSettings()
 
-            Surface(
+                if (!batteryOptimizationExempt) {
+                    FilledTonalButton(
+                        onClick = { requestIgnoreBatteryOptimizations(context) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.battery_opt)) }
+                }
+            } else {
+                ChargeControls(settings, battery, toggle)
+
+                Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier = Modifier.fillMaxWidth()
@@ -144,27 +175,10 @@ private fun MainScreen() {
                 }
             }
 
-            FilledTonalButton(
-                onClick = { advancedExpanded = !advancedExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (advancedExpanded) "إخفاء الإعدادات المتقدمة"
-                    else stringResource(R.string.advanced)
-                )
-            }
-
-            if (advancedExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    AlertSoundSettings()
-
-                    if (!batteryOptimizationExempt) {
-                        FilledTonalButton(
-                            onClick = { requestIgnoreBatteryOptimizations(context) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(stringResource(R.string.battery_opt)) }
-                    }
-                }
+                FilledTonalButton(
+                    onClick = { showingAdvancedSettings = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.advanced)) }
             }
         }
     }
