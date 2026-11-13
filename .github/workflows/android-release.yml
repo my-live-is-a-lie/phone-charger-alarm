@@ -29,8 +29,13 @@ jobs:
       - name: Install required SDK packages
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses
-          "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;36.0.0"
+          # Android 17 preview is published as android-37.0, while AGP
+          # resolves compileSdk 37 using the conventional android-37 path.
+          if [ -d "$ANDROID_HOME/platforms/android-37.0" ] && [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
