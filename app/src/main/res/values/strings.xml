@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">تنبيه الشحن</string>
+    <string name="tile_label">تنبيه الشحن</string>
+    <string name="tile_subtitle_on">ينبّه عند %1$d%%</string>
+    <string name="tile_subtitle_off">متوقف</string>
+
+    <string name="channel_status">حالة المراقبة</string>
+    <string name="channel_alert">تنبيه الشحن</string>
+    <string name="status_waiting">في انتظار الشاحن • التنبيه عند %1$d%%</string>
+    <string name="status_charging">يشحن %1$d%% • التنبيه عند %2$d%%</string>
+    <string name="alert_title">وصلت البطارية إلى %1$d%%</string>
+    <string name="alert_text">افصل الشاحن الآن للحفاظ على البطارية</string>
+
+    <string name="percent">%1$d%%</string>
+    <string name="main_subtitle">ينبّهك عند وصول الشحن للنسبة المحددة</string>
+    <string name="plugged">متصل بالشاحن</string>
+    <string name="unplugged">الشاحن غير متصل</string>
+    <string name="monitor_title">مراقبة الشحن</string>
+    <string name="monitor_on">مفعّلة</string>
+    <string name="monitor_off">متوقفة</string>
+    <string name="threshold_title">نسبة التنبيه</string>
+    <string name="advanced">الإعدادات المتقدمة</string>
+
+    <string name="tools_title">أدوات</string>
+    <string name="test_alert">اختبار التنبيه</string>
+    <string name="battery_opt">استثناء من تحسين البطارية</string>
+    <string name="add_tile">إضافة البلاطة إلى الإعدادات السريعة</string>
+    <string name="tips">على أجهزة Xiaomi وHuawei وOppo وSamsung فعّل «التشغيل التلقائي» واستثنِ التطبيق من تحسين البطارية حتى لا يقتله النظام.</string>
+</resources>
