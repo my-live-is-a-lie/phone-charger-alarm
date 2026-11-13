@@ -70,6 +70,9 @@ private fun MainScreen() {
     var exactAlarmAllowed by remember {
         mutableStateOf(Build.VERSION.SDK_INT < 31 || context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms())
     }
+    var fullScreenIntentAllowed by remember {
+        mutableStateOf(Build.VERSION.SDK_INT < 34 || context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent())
+    }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -81,6 +84,8 @@ private fun MainScreen() {
                 exactAlarmAllowed = Build.VERSION.SDK_INT < 31 ||
                     context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
                 if (exactAlarmAllowed && Prefs.isEnabled(context)) ChargeScheduler.start(context)
+                fullScreenIntentAllowed = Build.VERSION.SDK_INT < 34 ||
+                    context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -150,6 +155,20 @@ private fun MainScreen() {
                         ) { Text(stringResource(R.string.add_tile)) }
                     }
                 }
+            }
+
+            if (Build.VERSION.SDK_INT >= 34 && !fullScreenIntentAllowed) {
+                FilledTonalButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
+                                    .setData(Uri.parse("package:${context.packageName}"))
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.full_screen_permission)) }
             }
 
             if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAllowed) {
