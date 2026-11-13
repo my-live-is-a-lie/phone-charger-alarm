@@ -48,14 +48,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-/** الواجهة الكاملة — بدون أيقونة في المشغل، تُفتح من نافذة البلاطة */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            ChargeAlertTheme { MainScreen() }
-        }
+        setContent { ChargeAlertTheme { MainScreen() } }
     }
 }
 
@@ -64,10 +61,13 @@ private fun MainScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var tileAdded by remember { mutableStateOf(Prefs.isTileAdded(context)) }
+
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 overlayAllowed = Settings.canDrawOverlays(context)
+                tileAdded = Prefs.isTileAdded(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -114,7 +114,10 @@ private fun MainScreen() {
                         fontWeight = FontWeight.Bold
                     )
                     Button(
-                        onClick = { Notifications.createChannels(context); Notifications.alert(context, settings.threshold) },
+                        onClick = {
+                            Notifications.createChannels(context)
+                            Notifications.alert(context, settings.threshold)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.test_alert)) }
 
@@ -123,36 +126,19 @@ private fun MainScreen() {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.battery_opt)) }
 
-                    OutlinedButton(
-                        onClick = { requestOverlayPermission(context) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (overlayAllowed) stringResource(R.string.overlay_permission_granted)
-                            else stringResource(R.string.overlay_permission_action)
-                        )
+                    if (!overlayAllowed) {
+                        OutlinedButton(
+                            onClick = { requestOverlayPermission(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.overlay_permission_action)) }
                     }
 
-                    if (Build.VERSION.SDK_INT >= 33) {
+                    if (Build.VERSION.SDK_INT >= 33 && !tileAdded) {
                         OutlinedButton(
                             onClick = { requestAddTile(context) },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.add_tile)) }
                     }
-
-                    Text(
-                        text = stringResource(
-                            if (overlayAllowed) R.string.overlay_permission_enabled_tip
-                            else R.string.overlay_permission_tip
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.tips),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
@@ -186,5 +172,9 @@ private fun requestAddTile(context: Context) {
         context.getString(R.string.tile_label),
         Icon.createWithResource(context, R.drawable.ic_battery),
         context.mainExecutor
-    ) { }
+    ) { result ->
+        if (result == 0 || result == 1) {
+            Prefs.setTileAdded(context, true)
+        }
+    }
 }

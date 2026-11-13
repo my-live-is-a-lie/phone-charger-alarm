@@ -11,7 +11,16 @@ import android.service.quicksettings.TileService
 
 class ChargeTileService : TileService() {
 
+    override fun onTileAdded() {
+        Prefs.setTileAdded(this, true)
+    }
+
+    override fun onTileRemoved() {
+        Prefs.setTileAdded(this, false)
+    }
+
     override fun onStartListening() {
+        Prefs.setTileAdded(this, true)
         refresh()
     }
 

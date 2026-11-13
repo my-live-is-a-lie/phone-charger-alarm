@@ -20,8 +20,4 @@
     <string name="battery_opt">استثناء من تحسين البطارية</string>
     <string name="add_tile">إضافة البلاطة إلى الإعدادات السريعة</string>
     <string name="overlay_permission_action">السماح بالظهور فوق التطبيقات الأخرى</string>
-    <string name="overlay_permission_granted">الظهور فوق التطبيقات الأخرى مفعّل</string>
-    <string name="overlay_permission_tip">فعّل هذا الإذن ليظهر تنبيه الكبسولة فوق التطبيق المفتوح عند اكتمال الشحن.</string>
-    <string name="overlay_permission_enabled_tip">إذن الظهور فوق التطبيقات مفعّل؛ ستظهر كبسولة التنبيه فوق التطبيقات عند بلوغ النسبة المحددة.</string>
-    <string name="tips">لا يظهر إشعار دائم: يستيقظ التطبيق عند توصيل الشاحن فقط. على أجهزة Samsung أضف التطبيق إلى «التطبيقات التي لا تنام أبداً» من إعدادات البطارية، وعلى Xiaomi وHuawei وOppo فعّل «التشغيل التلقائي» واستثنِ التطبيق من تحسين البطارية.</string>
 </resources>
