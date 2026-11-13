@@ -7,6 +7,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.RingtoneManager
+import android.net.Uri
+import android.app.Activity
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
@@ -20,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -28,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -128,6 +133,77 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
     }
 }
 
+
+@Composable
+private fun AlertSoundCard() {
+    val context = LocalContext.current
+    var selectedUri by remember { mutableStateOf(Prefs.alertSoundUri(context)) }
+    val currentUri = selectedUri?.let { Uri.parse(it) }
+        ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+    val currentName = remember(selectedUri) {
+        runCatching {
+            RingtoneManager.getRingtone(context, currentUri)?.getTitle(context)
+        }.getOrNull() ?: context.getString(R.string.alert_sound_default)
+    }
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            @Suppress("DEPRECATION")
+            val picked = result.data?.getParcelableExtra<Uri>(
+                RingtoneManager.EXTRA_RINGTONE_PICKED_URI
+            )
+            selectedUri = picked?.toString()
+            Prefs.setAlertSoundUri(context, selectedUri)
+            Notifications.createChannels(context)
+        }
+    }
+
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.advanced),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(R.string.alert_sound_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = currentName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, context.getString(R.string.alert_sound_picker_title))
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+                            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+                        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, currentUri)
+                    }
+                    picker.launch(intent)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.choose_alert_sound))
+            }
+        }
+    }
+}
+
 @Composable
 fun ChargeControls(
     settings: SettingsState,
@@ -138,6 +214,7 @@ fun ChargeControls(
         StatusCard(battery)
         MonitorCard(settings.enabled, onToggle)
         ThresholdCard(settings)
+        AlertSoundCard()
     }
 }
 

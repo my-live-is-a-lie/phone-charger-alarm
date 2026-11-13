@@ -61,14 +61,21 @@ object Notifications {
         createChannels(context)
         val overlay = overlayIntent(context, percent)
         if (Settings.canDrawOverlays(context)) {
-            runCatching {
+            val launched = runCatching {
                 context.startActivity(
                     Intent(context, AlertOverlayActivity::class.java)
                         .putExtra(EXTRA_PERCENT, percent)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 )
+            }.isSuccess
+            if (launched) {
+                // The overlay owns the alert audio; do not also show a heads-up system notification.
+                context.getSystemService(NotificationManager::class.java).cancel(ID_ALERT)
+                return
             }
         }
+
+        // Fallback for devices where overlay permission is not available.
         val notification = NotificationCompat.Builder(context, channelId(context))
             .setSmallIcon(R.drawable.ic_battery)
             .setContentTitle(context.getString(R.string.alert_title, percent))
@@ -81,7 +88,6 @@ object Notifications {
             .setFullScreenIntent(overlay, true)
             .setContentIntent(overlay)
             .build()
-        notification.flags = notification.flags or Notification.FLAG_INSISTENT
         context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
     }
 

@@ -4,11 +4,16 @@ package com.example.chargealert
 
 import android.os.Build
 import android.os.Bundle
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
+import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
@@ -25,6 +30,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -46,9 +52,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 class AlertOverlayActivity : ComponentActivity() {
+    private var alertRingtone: Ringtone? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -56,6 +67,7 @@ class AlertOverlayActivity : ComponentActivity() {
             setTurnScreenOn(true)
         }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        startAlertSound()
         enableEdgeToEdge()
         setContent {
             ChargeAlertTheme {
@@ -72,9 +84,36 @@ class AlertOverlayActivity : ComponentActivity() {
         setIntent(intent)
     }
 
+    private fun startAlertSound() {
+        stopAlertSound()
+        val uri = Prefs.alertSoundUri(this)?.let { Uri.parse(it) }
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        alertRingtone = runCatching {
+            RingtoneManager.getRingtone(this, uri)?.apply {
+                audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) setLooping(true)
+                play()
+            }
+        }.getOrNull()
+    }
+
+    private fun stopAlertSound() {
+        runCatching { alertRingtone?.stop() }
+        alertRingtone = null
+    }
+
     private fun dismissAlert() {
+        stopAlertSound()
         Notifications.cancelAlert(this)
         finish()
+    }
+
+    override fun onDestroy() {
+        stopAlertSound()
+        super.onDestroy()
     }
 }
 
@@ -97,7 +136,9 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
         }
     }
 
-    var dragDistance by remember { mutableFloatStateOf(0f) }
+    val cardOffset = remember { Animatable(0f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val dismissThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
 
     Box(
         modifier = Modifier
@@ -107,19 +148,32 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
                 detectVerticalDragGestures(
                     onVerticalDrag = { change, amount ->
                         change.consume()
-                        dragDistance += amount
+                        scope.launch {
+                            cardOffset.snapTo((cardOffset.value + amount).coerceAtMost(0f))
+                        }
                     },
                     onDragEnd = {
-                        if (dragDistance < -76f) onDismiss()
-                        dragDistance = 0f
+                        scope.launch {
+                            if (cardOffset.value < -dismissThreshold) {
+                                cardOffset.animateTo(-size.height.toFloat(), tween(180))
+                                onDismiss()
+                            } else {
+                                cardOffset.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f))
+                            }
+                        }
                     },
-                    onDragCancel = { dragDistance = 0f }
+                    onDragCancel = {
+                        scope.launch {
+                            cardOffset.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f))
+                        }
+                    }
                 )
             }
     ) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .offset { IntOffset(0, cardOffset.value.toInt()) }
                 .navigationBarsPadding()
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
@@ -135,13 +189,6 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
                 val centerX = size.width / 2f
                 val top = size.height * 0.18f
                 val bottom = size.height * 0.82f
-                drawLine(
-                    color = Color.White,
-                    start = androidx.compose.ui.geometry.Offset(centerX, bottom),
-                    end = androidx.compose.ui.geometry.Offset(centerX, top + size.height * 0.22f),
-                    strokeWidth = 3.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
                 val head = Path().apply {
                     moveTo(centerX - size.width * 0.25f, top + size.height * 0.25f)
                     lineTo(centerX, top)
