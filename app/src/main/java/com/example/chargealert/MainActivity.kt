@@ -33,20 +33,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /** الواجهة الكاملة — بدون أيقونة في المشغل، تُفتح من نافذة البلاطة */
 class MainActivity : ComponentActivity() {
@@ -62,18 +55,6 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainScreen() {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                overlayAllowed = Settings.canDrawOverlays(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
     val settings = rememberSettingsState()
     val battery by rememberBatteryInfo()
     val toggle = rememberToggleAction(settings)
@@ -123,16 +104,6 @@ private fun MainScreen() {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.battery_opt)) }
 
-                    OutlinedButton(
-                        onClick = { requestOverlayPermission(context) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (overlayAllowed) stringResource(R.string.overlay_permission_granted)
-                            else stringResource(R.string.overlay_permission_action)
-                        )
-                    }
-
                     if (Build.VERSION.SDK_INT >= 33) {
                         OutlinedButton(
                             onClick = { requestAddTile(context) },
@@ -140,14 +111,6 @@ private fun MainScreen() {
                         ) { Text(stringResource(R.string.add_tile)) }
                     }
 
-                    Text(
-                        text = stringResource(
-                            if (overlayAllowed) R.string.overlay_permission_enabled_tip
-                            else R.string.overlay_permission_tip
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                     Text(
                         text = stringResource(R.string.tips),
                         style = MaterialTheme.typography.bodyMedium,
@@ -164,15 +127,6 @@ private fun requestIgnoreBatteryOptimizations(context: Context) {
     if (pm.isIgnoringBatteryOptimizations(context.packageName)) return
     val intent = Intent(
         Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-        Uri.parse("package:${context.packageName}")
-    )
-    runCatching { context.startActivity(intent) }
-}
-
-private fun requestOverlayPermission(context: Context) {
-    if (Settings.canDrawOverlays(context)) return
-    val intent = Intent(
-        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
         Uri.parse("package:${context.packageName}")
     )
     runCatching { context.startActivity(intent) }

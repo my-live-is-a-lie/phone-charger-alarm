@@ -8,18 +8,22 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
-import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
 object Notifications {
+    const val CHANNEL_STATUS = "status"
     const val CHANNEL_ALERT = "alert_v1"
-    private const val OLD_CHANNEL_STATUS = "status"
+    const val ID_STATUS = 1
     const val ID_ALERT = 2
-    const val EXTRA_PERCENT = "extra_battery_percent"
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.deleteNotificationChannel(OLD_CHANNEL_STATUS)
+
+        val status = NotificationChannel(
+            CHANNEL_STATUS,
+            context.getString(R.string.channel_status),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply { setShowBadge(false) }
 
         val alert = NotificationChannel(
             CHANNEL_ALERT,
@@ -35,52 +39,46 @@ object Notifications {
             )
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 600, 300, 600)
-            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
-        nm.createNotificationChannel(alert)
+
+        nm.createNotificationChannels(listOf(status, alert))
     }
 
-    private fun overlayIntent(context: Context, percent: Int): PendingIntent =
+    private fun openSheetIntent(context: Context): PendingIntent =
         PendingIntent.getActivity(
             context,
             0,
-            Intent(context, AlertOverlayActivity::class.java)
-                .putExtra(EXTRA_PERCENT, percent)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(context, QuickSheetActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+    fun status(context: Context, text: String): Notification =
+        NotificationCompat.Builder(context, CHANNEL_STATUS)
+            .setSmallIcon(R.drawable.ic_battery)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openSheetIntent(context))
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .build()
+
     fun alert(context: Context, percent: Int) {
-        createChannels(context)
-        val overlay = overlayIntent(context, percent)
-
-        // SYSTEM_ALERT_WINDOW grants Android's background-activity-launch exemption.
-        // With this permission, show the custom full-screen capsule over the current app.
-        if (Settings.canDrawOverlays(context)) {
-            runCatching {
-                context.startActivity(
-                    Intent(context, AlertOverlayActivity::class.java)
-                        .putExtra(EXTRA_PERCENT, percent)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                )
-            }
-        }
-
-        // Keep a notification as a reliable fallback and as the lock-screen entry point.
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERT)
             .setSmallIcon(R.drawable.ic_battery)
             .setContentTitle(context.getString(R.string.alert_title, percent))
             .setContentText(context.getString(R.string.alert_text))
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(false)
-            .setOngoing(true)
-            .setFullScreenIntent(overlay, true)
-            .setContentIntent(overlay)
+            .setAutoCancel(true)
+            .setContentIntent(openSheetIntent(context))
             .build()
+        // يكرر الصوت حتى يزيل المستخدم الإشعار أو يفصل الشاحن
         notification.flags = notification.flags or Notification.FLAG_INSISTENT
-        context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
+
+        context.getSystemService(NotificationManager::class.java)
+            .notify(ID_ALERT, notification)
     }
 
     fun cancelAlert(context: Context) {
