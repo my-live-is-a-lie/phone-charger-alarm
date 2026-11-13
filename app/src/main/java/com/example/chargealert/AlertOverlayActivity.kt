@@ -13,7 +13,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
@@ -52,9 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -136,7 +133,7 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
         }
     }
 
-    val cardOffset = remember { Animatable(0f) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val dismissThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 100.dp.toPx() }
 
@@ -146,25 +143,34 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
             .background(Color.Black.copy(alpha = 0.48f))
             .pointerInput(onDismiss) {
                 detectVerticalDragGestures(
+                    onDragStart = { dragOffset = 0f },
                     onVerticalDrag = { change, amount ->
                         change.consume()
-                        scope.launch {
-                            cardOffset.snapTo((cardOffset.value + amount).coerceAtMost(0f))
-                        }
+                        dragOffset = (dragOffset + amount).coerceAtMost(0f)
                     },
                     onDragEnd = {
+                        val releasedAt = dragOffset
                         scope.launch {
-                            if (cardOffset.value < -dismissThreshold) {
-                                cardOffset.animateTo(-size.height.toFloat(), tween(180))
+                            val animation = Animatable(releasedAt)
+                            if (releasedAt < -dismissThreshold) {
+                                animation.animateTo(-size.height.toFloat(), tween(180)) {
+                                    dragOffset = value
+                                }
                                 onDismiss()
                             } else {
-                                cardOffset.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f))
+                                animation.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f)) {
+                                    dragOffset = value
+                                }
                             }
                         }
                     },
                     onDragCancel = {
+                        val releasedAt = dragOffset
                         scope.launch {
-                            cardOffset.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 420f))
+                            Animatable(releasedAt).animateTo(
+                                0f,
+                                spring(dampingRatio = 0.72f, stiffness = 420f)
+                            ) { dragOffset = value }
                         }
                     }
                 )
@@ -173,7 +179,7 @@ private fun AlertOverlayScreen(percent: Int, onDismiss: () -> Unit) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .offset { IntOffset(0, cardOffset.value.toInt()) }
+                .offset { IntOffset(0, dragOffset.roundToInt()) }
                 .navigationBarsPadding()
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
