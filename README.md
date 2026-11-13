@@ -14,9 +14,6 @@ chosen battery level), so you can unplug it on time.
 
 Release APKs are built automatically on GitHub Actions. Download the latest
 build from the **Actions** tab (artifact `phone-charger-alarm-release`).
-Release builds are signed with the release keystore stored in the repo's
-GitHub Secrets (`RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`,
-`RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`).
 
 To build locally:
 
