@@ -63,7 +63,7 @@ class SettingsState(private val context: Context) {
         MonitorController.refreshTile(context)
     }
 
-    fun setEnabled(on: Boolean) {
+    fun updateEnabled(on: Boolean) {
         MonitorController.setEnabled(context, on)
         enabled = Prefs.isEnabled(context)
     }
@@ -109,7 +109,7 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> if (granted) settings.setEnabled(true) }
+    ) { granted -> if (granted) settings.updateEnabled(true) }
 
     return remember(settings) {
         { on: Boolean ->
@@ -118,11 +118,11 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
                     context, Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             if (!on) {
-                settings.setEnabled(false)
+                settings.updateEnabled(false)
             } else if (needsPermission) {
                 launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                settings.setEnabled(true)
+                settings.updateEnabled(true)
             }
         }
     }
