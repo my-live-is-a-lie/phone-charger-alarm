@@ -210,11 +210,27 @@ object ChargeScheduler {
         )
 
     private fun scheduleAlarm(context: Context, delayMs: Long) {
-        context.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(
-            AlarmManager.ELAPSED_REALTIME_WAKEUP,
-            SystemClock.elapsedRealtime() + delayMs.coerceAtLeast(MIN_DELAY),
-            alarmIntent(context)
-        )
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val triggerAt = SystemClock.elapsedRealtime() + delayMs.coerceAtLeast(MIN_DELAY)
+        val pendingIntent = alarmIntent(context)
+        // On Android 12+, inexact alarms may be deferred substantially, which can
+        // miss a rapidly crossed charge threshold. Use exact while-idle alarms when
+        // the user has granted the system's exact-alarm access; retain a safe fallback.
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+        ) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pendingIntent
+            )
+        } else {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerAt,
+                pendingIntent
+            )
+        }
     }
 
     private fun cancelAlarm(context: Context) {
