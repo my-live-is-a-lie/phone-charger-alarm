@@ -60,7 +60,7 @@ class SettingsState(private val context: Context) {
     fun updateThreshold(value: Int) {
         Prefs.setThreshold(context, value)
         threshold = Prefs.threshold(context)
-        MonitorController.refreshTile(context)
+        MonitorController.onThresholdChanged(context)
     }
 
     fun updateEnabled(on: Boolean) {
