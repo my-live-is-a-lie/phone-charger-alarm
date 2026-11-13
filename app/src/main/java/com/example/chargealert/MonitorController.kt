@@ -5,8 +5,14 @@ import android.service.quicksettings.TileService
 object MonitorController {
     fun setEnabled(context: Context, enabled: Boolean) {
         val app=context.applicationContext
-        Prefs.setEnabled(app,enabled)
-        if(enabled) ChargeScheduler.start(app) else ChargeScheduler.stop(app)
+        Prefs.setEnabled(app, enabled)
+        if (enabled) {
+            BatteryMonitorService.start(app)
+            ChargeScheduler.start(app)
+        } else {
+            BatteryMonitorService.stop(app)
+            ChargeScheduler.stop(app)
+        }
         refreshTile(app)
     }
     fun onThresholdChanged(context: Context) {

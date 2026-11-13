@@ -13,6 +13,9 @@
     <string name="monitor_title">مراقبة الشحن</string>
     <string name="monitor_on">مفعّلة</string>
     <string name="monitor_off">متوقفة</string>
+    <string name="monitor_notification_channel">مراقبة الشحن</string>
+    <string name="monitor_notification_title">مراقبة الشحن مفعّلة</string>
+    <string name="monitor_notification_text">سيظهر تنبيه عند بلوغ النسبة التي اخترتها</string>
     <string name="threshold_title">نسبة التنبيه</string>
     <string name="advanced">الإعدادات المتقدمة</string>
     <string name="tools_title">أدوات</string>
