@@ -66,7 +66,6 @@ private fun MainScreen() {
     var batteryOptimizationExempt by remember {
         mutableStateOf(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
     }
-    var advancedExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
@@ -106,6 +105,8 @@ private fun MainScreen() {
         ) {
             ChargeControls(settings, battery, toggle)
 
+            AlertSoundSettings()
+
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -144,27 +145,11 @@ private fun MainScreen() {
                 }
             }
 
-            FilledTonalButton(
-                onClick = { advancedExpanded = !advancedExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    if (advancedExpanded) "إخفاء الإعدادات المتقدمة"
-                    else stringResource(R.string.advanced)
-                )
-            }
-
-            if (advancedExpanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    AlertSoundSettings()
-
-                    if (!batteryOptimizationExempt) {
-                        FilledTonalButton(
-                            onClick = { requestIgnoreBatteryOptimizations(context) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(stringResource(R.string.battery_opt)) }
-                    }
-                }
+            if (!batteryOptimizationExempt) {
+                FilledTonalButton(
+                    onClick = { requestIgnoreBatteryOptimizations(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.battery_opt)) }
             }
         }
     }
