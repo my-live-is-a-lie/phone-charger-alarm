@@ -66,9 +66,6 @@ private fun MainScreen() {
     var batteryOptimizationExempt by remember {
         mutableStateOf(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
     }
-    var exactAlarmAllowed by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < 31 || context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms())
-    }
     var fullScreenIntentAllowed by remember {
         mutableStateOf(Build.VERSION.SDK_INT < 34 || context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent())
     }
@@ -80,9 +77,7 @@ private fun MainScreen() {
                 tileAdded = Prefs.isTileAdded(context)
                 batteryOptimizationExempt = context.getSystemService(PowerManager::class.java)
                     .isIgnoringBatteryOptimizations(context.packageName)
-                exactAlarmAllowed = Build.VERSION.SDK_INT < 31 ||
-                    context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
-                if (exactAlarmAllowed && Prefs.isEnabled(context)) ChargeScheduler.start(context)
+                if (Prefs.isEnabled(context)) ChargeScheduler.start(context)
                 fullScreenIntentAllowed = Build.VERSION.SDK_INT < 34 ||
                     context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
             }
@@ -168,20 +163,6 @@ private fun MainScreen() {
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.full_screen_permission)) }
-            }
-
-            if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAllowed) {
-                FilledTonalButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                                    .setData(Uri.parse("package:${context.packageName}"))
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.exact_alarm_permission)) }
             }
 
             if (!batteryOptimizationExempt) {

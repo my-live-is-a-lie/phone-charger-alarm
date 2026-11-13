@@ -178,7 +178,7 @@ object ChargeScheduler {
         // Tighten polling as the target approaches so a faster-than-expected charge is
         // detected promptly, even before we have enough samples to learn its rate.
         val proximityLimit = when {
-            remaining <= 5 -> MINUTE
+            remaining <= 5 -> MIN_DELAY
             remaining <= 10 -> 2 * MINUTE
             else -> MAX_DELAY
         }
