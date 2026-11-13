@@ -8,26 +8,33 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
 object Notifications {
-    const val CHANNEL_ALERT = "alert_v1"
     private const val OLD_CHANNEL_STATUS = "status"
     const val ID_ALERT = 2
     const val EXTRA_PERCENT = "extra_battery_percent"
 
+    private fun channelId(context: Context): String {
+        val selected = Prefs.alertSoundUri(context)
+        val key = (selected ?: "default").hashCode().toUInt().toString(16)
+        return "alert_sound_" + key
+    }
+
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel(OLD_CHANNEL_STATUS)
-
+        val selectedUri = Prefs.alertSoundUri(context)?.let { Uri.parse(it) }
+        val soundUri = selectedUri ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         val alert = NotificationChannel(
-            CHANNEL_ALERT,
+            channelId(context),
             context.getString(R.string.channel_alert),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             setSound(
-                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                soundUri,
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -53,9 +60,6 @@ object Notifications {
     fun alert(context: Context, percent: Int) {
         createChannels(context)
         val overlay = overlayIntent(context, percent)
-
-        // SYSTEM_ALERT_WINDOW grants Android's background-activity-launch exemption.
-        // With this permission, show the custom full-screen capsule over the current app.
         if (Settings.canDrawOverlays(context)) {
             runCatching {
                 context.startActivity(
@@ -65,9 +69,7 @@ object Notifications {
                 )
             }
         }
-
-        // Keep a notification as a reliable fallback and as the lock-screen entry point.
-        val notification = NotificationCompat.Builder(context, CHANNEL_ALERT)
+        val notification = NotificationCompat.Builder(context, channelId(context))
             .setSmallIcon(R.drawable.ic_battery)
             .setContentTitle(context.getString(R.string.alert_title, percent))
             .setContentText(context.getString(R.string.alert_text))

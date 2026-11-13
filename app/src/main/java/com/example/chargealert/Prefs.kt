@@ -6,6 +6,7 @@ object Prefs {
     const val KEY_THRESHOLD = "threshold"
     const val KEY_ENABLED = "enabled"
     const val KEY_ALERTED_AT = "alerted_at"
+    private const val KEY_ALERT_SOUND_URI = "alert_sound_uri"
     private const val KEY_TILE_ADDED = "quick_settings_tile_added"
     private const val KEY_RATE = "learned_rate_ms_per_pct"
     private const val KEY_S_START_TIME = "session_start_time"
@@ -24,6 +25,8 @@ object Prefs {
     fun setEnabled(context: Context, value: Boolean) { of(context).edit().putBoolean(KEY_ENABLED, value).apply() }
     fun isTileAdded(context: Context): Boolean = of(context).getBoolean(KEY_TILE_ADDED, false)
     fun setTileAdded(context: Context, value: Boolean) { of(context).edit().putBoolean(KEY_TILE_ADDED, value).apply() }
+    fun alertSoundUri(context: Context): String? = of(context).getString(KEY_ALERT_SOUND_URI, null)
+    fun setAlertSoundUri(context: Context, value: String?) { of(context).edit().putString(KEY_ALERT_SOUND_URI, value).apply() }
     fun alertedAt(context: Context): Long = of(context).getLong(KEY_ALERTED_AT, 0L)
     fun setAlertedAt(context: Context, value: Long) { of(context).edit().putLong(KEY_ALERTED_AT, value).apply() }
     fun learnedRate(context: Context): Long = of(context).getLong(KEY_RATE, DEFAULT_RATE_MS)

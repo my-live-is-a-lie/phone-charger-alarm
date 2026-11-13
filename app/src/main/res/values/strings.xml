@@ -20,4 +20,8 @@
     <string name="battery_opt">استثناء من تحسين البطارية</string>
     <string name="add_tile">إضافة البلاطة إلى الإعدادات السريعة</string>
     <string name="overlay_permission_action">السماح بالظهور فوق التطبيقات الأخرى</string>
+    <string name="alert_sound_title">نغمة التنبيه</string>
+    <string name="alert_sound_default">نغمة المنبه الافتراضية</string>
+    <string name="alert_sound_picker_title">اختر نغمة تنبيه الشحن</string>
+    <string name="choose_alert_sound">اختيار نغمة التنبيه</string>
 </resources>
