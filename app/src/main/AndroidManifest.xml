@@ -17,6 +17,12 @@
         </activity>
         <service android:name=".PlugJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <receiver android:name=".CheckReceiver" android:exported="false" />
+        <receiver android:name=".PowerConnectionReceiver" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
         <service android:name=".ChargeTileService" android:exported="true" android:icon="@drawable/ic_battery" android:label="@string/tile_label" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
         </service>
