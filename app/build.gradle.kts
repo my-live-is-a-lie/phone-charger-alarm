@@ -43,7 +43,11 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.material3:material3")
+    // Material 3 stable 1.4.0 made the Expressive APIs internal, so the code
+    // (MaterialExpressiveTheme, MotionScheme, wavy indicators, ToggleButton,
+    // LargeFlexibleTopAppBar) needs the 1.5.0 line. Pin it explicitly; the
+    // BOM still manages every other Compose artifact.
+    implementation("androidx.compose.material3:material3:1.5.0-rc01")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.16.0")
 }
