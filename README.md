@@ -12,17 +12,17 @@ chosen battery level), so you can unplug it on time.
 
 ## Build
 
-Release APKs are built automatically on GitHub Actions for **arm64-v8a** only.
-Download the latest build from the **Actions** tab (artifact
-`phone-charger-alarm-arm64-v8a-release`).
+Release APKs are built automatically on GitHub Actions. Download the latest
+build from the **Actions** tab (artifact `phone-charger-alarm-release`).
 
 To build locally:
 
 ```bash
-./gradlew assembleArm64-v8aRelease
+./gradlew assembleRelease
 ```
 
-The APK is at `app/build/outputs/apk/arm64-v8a/release/`.
+The APK is at `app/build/outputs/apk/release/`. The app has no native code,
+so the APK is architecture-independent and runs on arm64-v8a devices.
 
 ## Requirements
 
