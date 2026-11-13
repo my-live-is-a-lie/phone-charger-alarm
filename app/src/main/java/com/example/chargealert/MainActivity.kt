@@ -63,6 +63,9 @@ private fun MainScreen() {
     val lifecycleOwner = LocalLifecycleOwner.current
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var tileAdded by remember { mutableStateOf(Prefs.isTileAdded(context)) }
+    var batteryOptimizationExempt by remember {
+        mutableStateOf(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
+    }
     var advancedExpanded by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner, context) {
@@ -70,6 +73,8 @@ private fun MainScreen() {
             if (event == Lifecycle.Event.ON_RESUME) {
                 overlayAllowed = Settings.canDrawOverlays(context)
                 tileAdded = Prefs.isTileAdded(context)
+                batteryOptimizationExempt = context.getSystemService(PowerManager::class.java)
+                    .isIgnoringBatteryOptimizations(context.packageName)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -123,11 +128,6 @@ private fun MainScreen() {
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.test_alert)) }
 
-                    FilledTonalButton(
-                        onClick = { requestIgnoreBatteryOptimizations(context) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(stringResource(R.string.battery_opt)) }
-
                     if (!overlayAllowed) {
                         OutlinedButton(
                             onClick = { requestOverlayPermission(context) },
@@ -155,7 +155,16 @@ private fun MainScreen() {
             }
 
             if (advancedExpanded) {
-                AlertSoundSettings()
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    AlertSoundSettings()
+
+                    if (!batteryOptimizationExempt) {
+                        FilledTonalButton(
+                            onClick = { requestIgnoreBatteryOptimizations(context) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.battery_opt)) }
+                    }
+                }
             }
         }
     }
