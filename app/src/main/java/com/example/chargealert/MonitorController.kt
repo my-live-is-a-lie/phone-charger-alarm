@@ -7,10 +7,8 @@ object MonitorController {
         val app=context.applicationContext
         Prefs.setEnabled(app, enabled)
         if (enabled) {
-            BatteryMonitorService.start(app)
             ChargeScheduler.start(app)
         } else {
-            BatteryMonitorService.stop(app)
             ChargeScheduler.stop(app)
         }
         refreshTile(app)

@@ -79,7 +79,9 @@ object Notifications {
             .setContentIntent(overlay)
             .build()
             .apply { flags = flags or Notification.FLAG_INSISTENT }
-        context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
+        runCatching {
+            context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
+        }
 
         if (Settings.canDrawOverlays(context)) {
             runCatching {

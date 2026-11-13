@@ -16,6 +16,7 @@
     <string name="monitor_notification_channel">مراقبة الشحن</string>
     <string name="monitor_notification_title">مراقبة الشحن مفعّلة</string>
     <string name="monitor_notification_text">سيظهر تنبيه عند بلوغ النسبة التي اخترتها</string>
+    <string name="monitor_notification_progress">البطارية %1$d%% • التنبيه عند %2$d%%</string>
     <string name="threshold_title">نسبة التنبيه</string>
     <string name="advanced">الإعدادات المتقدمة</string>
     <string name="tools_title">أدوات</string>

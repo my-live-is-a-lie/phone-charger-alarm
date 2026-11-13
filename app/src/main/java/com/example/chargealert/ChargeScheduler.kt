@@ -19,6 +19,7 @@ object ChargeScheduler {
     private const val EXACT_WINDOW = 12 * MINUTE
     private const val MIN_DELAY = 30_000L
     private const val MAX_DELAY = 15 * MINUTE
+    private const val MONITOR_RETRY_DELAY = 3_000L
 
     fun start(context: Context) {
         if (!Prefs.isEnabled(context)) return
@@ -30,12 +31,14 @@ object ChargeScheduler {
             } else {
                 check(context)
             }
+            ensureMonitor(context, retrySoon = true)
         } else {
             endSession(context)
         }
     }
 
     fun stop(context: Context) {
+        BatteryMonitorService.stop(context)
         context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
         cancelAlarm(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
@@ -56,6 +59,7 @@ object ChargeScheduler {
         } else {
             check(context)
         }
+        ensureMonitor(context, retrySoon = true)
     }
 
     fun onUnplugged(context: Context) {
@@ -95,9 +99,18 @@ object ChargeScheduler {
         val session = Prefs.session(context)
         if (session.startTime == 0L || info.percent < session.lastPct - 1) {
             beginSession(context, info, now)
+            ensureMonitor(context, retrySoon = false)
             return
         }
         process(context, info, session, now, updateLast = true)
+        ensureMonitor(context, retrySoon = false)
+    }
+
+    private fun ensureMonitor(context: Context, retrySoon: Boolean) {
+        if (BatteryMonitorService.ensureRunning(context)) return
+        if (retrySoon && Prefs.alertedAt(context) == 0L) {
+            scheduleAlarm(context, MONITOR_RETRY_DELAY, allowShort = true)
+        }
     }
 
     private fun beginSession(context: Context, info: BatteryInfo, now: Long) {
@@ -108,6 +121,7 @@ object ChargeScheduler {
     }
 
     private fun endSession(context: Context) {
+        BatteryMonitorService.stop(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
         Notifications.cancelAlert(context)
@@ -209,9 +223,10 @@ object ChargeScheduler {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    private fun scheduleAlarm(context: Context, delayMs: Long) {
+    private fun scheduleAlarm(context: Context, delayMs: Long, allowShort: Boolean = false) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val triggerAt = SystemClock.elapsedRealtime() + delayMs.coerceAtLeast(MIN_DELAY)
+        val triggerAt = SystemClock.elapsedRealtime() +
+            (if (allowShort) delayMs else delayMs.coerceAtLeast(MIN_DELAY))
         val pendingIntent = alarmIntent(context)
         // On Android 12+, inexact alarms may be deferred substantially, which can
         // miss a rapidly crossed charge threshold. Use exact while-idle alarms when
