@@ -29,6 +29,7 @@ import java.util.concurrent.Executors
 class BatteryMonitorService : Service() {
     private var receiver: BroadcastReceiver? = null
     private var lastLogged = ""
+    private var shownPercent = -1
     private val handler = Handler(Looper.getMainLooper())
     private val batteryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
@@ -66,6 +67,7 @@ class BatteryMonitorService : Service() {
                             DebugLog.add(context, "battery event pct=${current.percent} plugged=${current.plugged}")
                         }
                         ensureNotificationShown(current.percent)
+                        updateNotification(current.percent)
                         if (current.plugged) {
                             ChargeScheduler.check(context)
                         } else {
@@ -105,10 +107,18 @@ class BatteryMonitorService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    /** إشعار بلا نص قدر الإمكان: أهمية دنيا، بلا صوت، مخفي في شاشة القفل */
-    private fun buildNotification(@Suppress("UNUSED_PARAMETER") percent: Int): Notification {
+    /** إشعار دائم يعرض النسبة الحية، مثل التطبيق المرجعي: إشعار مرئي ومفيد يوضّح أن الخدمة تعمل */
+    private fun buildNotification(percent: Int): Notification {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_battery)
+            .setContentTitle(getString(R.string.monitor_notification_title))
+            .setContentText(
+                getString(
+                    R.string.monitor_notification_progress,
+                    percent.coerceIn(0, 100),
+                    Prefs.threshold(this)
+                )
+            )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -152,6 +162,13 @@ class BatteryMonitorService : Service() {
             runCatching { startAsForeground(buildNotification(percent)) }
             DebugLog.add(this, "monitor notification was missing -> re-posted")
         }
+    }
+
+    /** يحدّث نص الإشعار بالنسبة الحية عند تغيّرها */
+    private fun updateNotification(percent: Int) {
+        if (percent == shownPercent) return
+        shownPercent = percent
+        runCatching { startAsForeground(buildNotification(percent)) }
     }
 
     private fun createMonitorChannel() {

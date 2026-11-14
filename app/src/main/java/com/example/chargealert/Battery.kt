@@ -17,6 +17,20 @@ object BatteryUtils {
     }
 
     fun read(context: Context): BatteryInfo {
+        // BatteryManager reads the live state directly. The sticky BATTERY_CHANGED
+        // broadcast can go stale while the screen is off (the system throttles it),
+        // which once made a check read plugged=false while the charger was still
+        // connected, ending the session instead of firing the alert.
+        val bm = context.getSystemService(BatteryManager::class.java)
+        val percent = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+        val status = bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_STATUS)
+            ?: BatteryManager.BATTERY_STATUS_UNKNOWN
+        if (percent in 1..100 && status != BatteryManager.BATTERY_STATUS_UNKNOWN) {
+            val plugged = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL
+            return BatteryInfo(percent, plugged)
+        }
+        // Fallback to the sticky broadcast if BatteryManager has no data.
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         return if (intent != null) parse(intent) else BatteryInfo(0, false)
     }
