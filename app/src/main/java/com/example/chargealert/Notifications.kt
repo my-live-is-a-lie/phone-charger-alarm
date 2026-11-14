@@ -9,6 +9,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
@@ -93,6 +94,8 @@ object Notifications {
             DebugLog.add(context, "alert notification posted")
         }.onFailure { DebugLog.add(context, "alert notify FAILED: ${it.javaClass.simpleName}") }
 
+        wakeScreen(context)
+
         if (Settings.canDrawOverlays(context)) {
             runCatching {
                 context.startActivity(
@@ -102,6 +105,22 @@ object Notifications {
                 )
             }
         }
+    }
+
+    /** يوقظ الشاشة لثوانٍ عند التنبيه حتى لو كانت مغلقة */
+    @Suppress("DEPRECATION")
+    private fun wakeScreen(context: Context) {
+        runCatching {
+            val pm = context.getSystemService(PowerManager::class.java)
+            val lock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+                "chargealert:alert"
+            )
+            lock.acquire(10_000L)
+            DebugLog.add(context, "screen wake requested")
+        }.onFailure { DebugLog.add(context, "screen wake FAILED: ${it.javaClass.simpleName}") }
     }
 
     fun cancelAlert(context: Context) {

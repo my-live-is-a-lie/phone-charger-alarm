@@ -160,7 +160,8 @@ object ChargeScheduler {
         } else {
             nextDelay(context, info, session, now, threshold)
         }
-        scheduleAlarm(context, delay)
+        // قبل التنبيه: منبّه من نوع alarmClock لأنه لا يتأخر والشاشة مغلقة. بعد التنبيه يكفي منبّه عادي.
+        scheduleAlarm(context, delay, urgent = alertedAt == 0L)
     }
 
     private fun nextDelay(
@@ -226,17 +227,40 @@ object ChargeScheduler {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    private fun scheduleAlarm(context: Context, delayMs: Long, allowShort: Boolean = false) {
+    private fun scheduleAlarm(
+        context: Context,
+        delayMs: Long,
+        allowShort: Boolean = false,
+        urgent: Boolean = true
+    ) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val triggerAt = SystemClock.elapsedRealtime() +
-            (if (allowShort) delayMs else delayMs.coerceAtLeast(MIN_DELAY))
+        val delay = if (allowShort) delayMs else delayMs.coerceAtLeast(MIN_DELAY)
         val pendingIntent = alarmIntent(context)
-        // On Android 12+, inexact alarms may be deferred substantially, which can
-        // miss a rapidly crossed charge threshold. Use exact while-idle alarms when
-        // the user has granted the system's exact-alarm access; retain a safe fallback.
+
+        if (urgent) {
+            // The diagnostic log showed ordinary exact alarms being held back for minutes while
+            // the screen was off (a 30 s alarm fired 2+ minutes late). setAlarmClock() is exempt
+            // from those restrictions, so it is used until the alert has been sent.
+            val showIntent = PendingIntent.getActivity(
+                context,
+                ALARM_REQUEST,
+                Intent(context, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val ok = runCatching {
+                alarmManager.setAlarmClock(
+                    AlarmManager.AlarmClockInfo(System.currentTimeMillis() + delay, showIntent),
+                    pendingIntent
+                )
+            }.isSuccess
+            DebugLog.add(context, "next alarm in ${delay / 1000}s type=alarmClock ok=$ok")
+            if (ok) return
+        }
+
+        val triggerAt = SystemClock.elapsedRealtime() + delay
         val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
-        DebugLog.add(context, "next alarm in ${delayMs / 1000}s exact=$exact")
+        DebugLog.add(context, "next alarm in ${delay / 1000}s type=${if (exact) "exact" else "inexact"}")
         if (exact) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
