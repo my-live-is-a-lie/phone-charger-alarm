@@ -8,13 +8,11 @@ object Prefs {
     const val KEY_ALERTED_AT = "alerted_at"
     private const val KEY_ALERT_SOUND_URI = "alert_sound_uri"
     private const val KEY_TILE_ADDED = "quick_settings_tile_added"
-    private const val KEY_RATE = "learned_rate_ms_per_pct"
     private const val KEY_S_START_TIME = "session_start_time"
     private const val KEY_S_START_PCT = "session_start_pct"
     private const val KEY_S_LAST_TIME = "session_last_time"
     private const val KEY_S_LAST_PCT = "session_last_pct"
     const val DEFAULT_THRESHOLD = 80
-    private const val DEFAULT_RATE_MS = 90_000L
     data class Session(val startTime: Long, val startPct: Int, val lastTime: Long, val lastPct: Int) {
         companion object { val EMPTY = Session(0L, 0, 0L, 0) }
     }
@@ -29,8 +27,6 @@ object Prefs {
     fun setAlertSoundUri(context: Context, value: String?) { of(context).edit().putString(KEY_ALERT_SOUND_URI, value).apply() }
     fun alertedAt(context: Context): Long = of(context).getLong(KEY_ALERTED_AT, 0L)
     fun setAlertedAt(context: Context, value: Long) { of(context).edit().putLong(KEY_ALERTED_AT, value).apply() }
-    fun learnedRate(context: Context): Long = of(context).getLong(KEY_RATE, DEFAULT_RATE_MS)
-    fun setLearnedRate(context: Context, value: Long) { of(context).edit().putLong(KEY_RATE, value).apply() }
     fun session(context: Context): Session {
         val p=of(context)
         return Session(p.getLong(KEY_S_START_TIME,0L),p.getInt(KEY_S_START_PCT,0),p.getLong(KEY_S_LAST_TIME,0L),p.getInt(KEY_S_LAST_PCT,0))

@@ -2,7 +2,6 @@
 
 package com.example.chargealert
 
-import android.app.Activity
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
