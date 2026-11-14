@@ -14,6 +14,7 @@ import android.os.SystemClock
 object ChargeScheduler {
     private const val JOB_ID = 1001
     private const val ALARM_REQUEST = 2001
+    private const val REFRESH_REQUEST = 2002
     private const val MIN_DELAY = 30_000L
     private const val MONITOR_RETRY_DELAY = 3_000L
     private const val UNPLUG_CONFIRM_MS = 2_500L
@@ -46,6 +47,7 @@ object ChargeScheduler {
         BatteryMonitorService.stop(context)
         context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
         cancelAlarm(context)
+        cancelRefreshAlarm(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
         Notifications.cancelAlert(context)
@@ -162,6 +164,7 @@ object ChargeScheduler {
         Prefs.setAlertedAt(context, 0L)
         Notifications.cancelAlert(context)
         cancelAlarm(context)
+        cancelRefreshAlarm(context)
         scheduleJob(context)
     }
 
@@ -186,15 +189,16 @@ object ChargeScheduler {
         if (updateLast) {
             Prefs.setSession(context, session.copy(lastTime = now, lastPct = info.percent))
         }
-        // Periodic refresh (reference-app pattern): schedule the next exact-alarm check
-        // 90 s from now. setExactAndAllowWhileIdle is used, not setAlarmClock. The alarm
-        // fires CheckReceiver, which runs check() and re-schedules the next refresh, so the
-        // threshold is caught even if battery broadcasts stop arriving with the screen off.
+        // Periodic refresh (reference-app pattern): the 90 s exact alarm targets the
+        // monitor service itself (getForegroundService), not a BroadcastReceiver. When it
+        // fires, the service re-registers the BATTERY_CHANGED receiver, which makes the
+        // system deliver the current battery state immediately, so the threshold is caught
+        // even if broadcasts stop arriving with the screen off.
         if (Prefs.alertedAt(context) == 0L) {
-            scheduleAlarm(context, REFRESH_INTERVAL_MS, urgent = false)
+            scheduleRefreshAlarm(context)
         } else {
             // Alert already sent: no more refresh needed.
-            cancelAlarm(context)
+            cancelRefreshAlarm(context)
         }
     }
 
@@ -213,6 +217,46 @@ object ChargeScheduler {
             Intent(context, CheckReceiver::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+    /**
+     * The refresh alarm's target: the monitor service itself, like the reference app
+     * (BatteryService.h). Starting a foreground service wakes the app more reliably than
+     * delivering a broadcast to a receiver, and onStartCommand() re-registers the battery
+     * receiver, forcing an immediate fresh battery reading.
+     */
+    private fun refreshIntent(context: Context): PendingIntent {
+        val intent = Intent(context, BatteryMonitorService::class.java).apply {
+            putExtra(BatteryMonitorService.EXTRA_REFRESH, true)
+        }
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(context, REFRESH_REQUEST, intent, flags)
+        } else {
+            PendingIntent.getService(context, REFRESH_REQUEST, intent, flags)
+        }
+    }
+
+    /** Schedules the next 90 s refresh (reference-app pattern: RTC_WAKEUP exact alarm). */
+    private fun scheduleRefreshAlarm(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+        val triggerAt = System.currentTimeMillis() + REFRESH_INTERVAL_MS
+        if (!exact) {
+            DebugLog.add(context, "next refresh in 90s type=skipped (exact alarms not allowed)")
+            return
+        }
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAt,
+            refreshIntent(context)
+        )
+        DebugLog.add(context, "next refresh in 90s type=exact (service)")
+    }
+
+    private fun cancelRefreshAlarm(context: Context) {
+        context.getSystemService(AlarmManager::class.java).cancel(refreshIntent(context))
+    }
 
     private fun scheduleAlarm(
         context: Context,

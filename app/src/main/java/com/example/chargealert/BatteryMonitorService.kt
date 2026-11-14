@@ -52,6 +52,12 @@ class BatteryMonitorService : Service() {
             return
         }
 
+        registerBatteryReceiver()
+        ChargeScheduler.check(this)
+    }
+
+    private fun registerBatteryReceiver() {
+        receiver?.let { runCatching { unregisterReceiver(it) } }
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action != Intent.ACTION_BATTERY_CHANGED) return
@@ -88,10 +94,21 @@ class BatteryMonitorService : Service() {
                 ContextCompat.RECEIVER_EXPORTED
             )
         }
-        ChargeScheduler.check(this)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Refresh heartbeat (reference-app pattern): the 90 s exact alarm targets this
+        // service itself (getForegroundService). When it fires, re-registering the receiver
+        // makes the system deliver the current sticky BATTERY_CHANGED intent immediately,
+        // so the threshold is checked even if broadcasts stopped arriving with the screen
+        // off. The direct check() is a safety net in case that delivery is delayed.
+        if (intent?.getBooleanExtra(EXTRA_REFRESH, false) == true) {
+            registerBatteryReceiver()
+            DebugLog.add(this, "refresh: receiver re-registered")
+            ChargeScheduler.check(this)
+        }
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         running = false
@@ -190,6 +207,8 @@ class BatteryMonitorService : Service() {
     }
 
     companion object {
+        /** Extra set on the refresh alarm's intent: re-register the battery receiver on start. */
+        const val EXTRA_REFRESH = "refresh"
         private const val OLD_CHANNEL_ID = "charge_monitor"
         private const val PREVIOUS_CHANNEL_ID = "charge_monitor_v2"
         private const val CHANNEL_ID = "charge_monitor_v3"
