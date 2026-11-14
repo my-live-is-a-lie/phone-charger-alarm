@@ -59,6 +59,8 @@ class AlertOverlayActivity : ComponentActivity() {
     private var alertRingtone: Ringtone? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DebugLog.add(this, "overlay onCreate ${DebugLog.screenState(this)}")
+        AlarmPlayer.stop(this) // الشاشة تشغّل صوتها بنفسها فلا نكرر الصوت
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -74,6 +76,16 @@ class AlertOverlayActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        DebugLog.add(this, "overlay onResume ${DebugLog.screenState(this)}")
+    }
+
+    override fun onStop() {
+        DebugLog.add(this, "overlay onStop ${DebugLog.screenState(this)}")
+        super.onStop()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -109,6 +121,7 @@ class AlertOverlayActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        DebugLog.add(this, "overlay onDestroy")
         stopAlertSound()
         super.onDestroy()
     }

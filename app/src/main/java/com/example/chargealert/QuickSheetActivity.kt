@@ -26,6 +26,11 @@ import androidx.compose.ui.unit.dp
 
 /** النافذة الصغيرة التي تُفتح بالضغط المطول على البلاطة */
 class QuickSheetActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        DebugLog.add(this, "sheet resumed ${DebugLog.screenState(this)}")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

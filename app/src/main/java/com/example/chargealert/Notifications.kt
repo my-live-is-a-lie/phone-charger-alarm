@@ -18,35 +18,31 @@ object Notifications {
     const val ID_ALERT = 2
     const val EXTRA_PERCENT = "extra_battery_percent"
 
-    private fun channelId(context: Context): String {
-        val selected = Prefs.alertSoundUri(context)
-        val key = (selected ?: "default").hashCode().toUInt().toString(16)
-        return "alert_sound_" + key
-    }
+    /** قناة التنبيه صامتة عمداً: الصوت والاهتزاز يتولاهما AlarmPlayer */
+    private fun channelId(@Suppress("UNUSED_PARAMETER") context: Context): String = "alert_silent_v1"
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel(OLD_CHANNEL_STATUS)
-        val selectedUri = Prefs.alertSoundUri(context)?.let { Uri.parse(it) }
-        val soundUri = selectedUri ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         val alert = NotificationChannel(
             channelId(context),
             context.getString(R.string.channel_alert),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            setSound(
-                soundUri,
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 600, 300, 600)
+            setSound(null, null)
+            enableVibration(false)
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(alert)
     }
+
+    private fun stopIntent(context: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            1,
+            Intent(context, AlarmStopReceiver::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
     private fun overlayIntent(context: Context, percent: Int): PendingIntent =
         PendingIntent.getActivity(
@@ -66,7 +62,7 @@ object Notifications {
             val fsi = if (android.os.Build.VERSION.SDK_INT >= 34) nm.canUseFullScreenIntent() else true
             DebugLog.add(
                 context,
-                "alert(): notifsEnabled=${nm.areNotificationsEnabled()} channelImportance=$importance overlay=${Settings.canDrawOverlays(context)} fullScreenIntent=$fsi"
+                "alert(): notifsEnabled=${nm.areNotificationsEnabled()} channelImportance=$importance overlay=${Settings.canDrawOverlays(context)} fullScreenIntent=$fsi ${DebugLog.screenState(context)}"
             )
         }
         val overlay = overlayIntent(context, percent)
@@ -87,6 +83,8 @@ object Notifications {
             .setOngoing(true)
             .setFullScreenIntent(overlay, true)
             .setContentIntent(overlay)
+            .addAction(0, context.getString(R.string.alert_stop), stopIntent(context))
+            .setDeleteIntent(stopIntent(context))
             .build()
             .apply { flags = flags or Notification.FLAG_INSISTENT }
         runCatching {
@@ -94,6 +92,7 @@ object Notifications {
             DebugLog.add(context, "alert notification posted")
         }.onFailure { DebugLog.add(context, "alert notify FAILED: ${it.javaClass.simpleName}") }
 
+        AlarmPlayer.start(context)
         wakeScreen(context)
 
         if (Settings.canDrawOverlays(context)) {
@@ -103,7 +102,8 @@ object Notifications {
                         .putExtra(EXTRA_PERCENT, percent)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 )
-            }
+                DebugLog.add(context, "overlay startActivity called")
+            }.onFailure { DebugLog.add(context, "overlay startActivity FAILED: ${it.javaClass.simpleName}") }
         }
     }
 
@@ -124,6 +124,7 @@ object Notifications {
     }
 
     fun cancelAlert(context: Context) {
+        AlarmPlayer.stop(context)
         context.getSystemService(NotificationManager::class.java).cancel(ID_ALERT)
     }
 }
