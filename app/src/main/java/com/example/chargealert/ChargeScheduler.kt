@@ -29,6 +29,8 @@ object ChargeScheduler {
 
     fun start(context: Context) {
         if (!Prefs.isEnabled(context)) return
+        // الخدمة تعمل طوال فترة تفعيل المراقبة، موصولاً الشاحن أم لا
+        ensureMonitor(context, retrySoon = true)
         val info = BatteryUtils.read(context)
         if (info.plugged) {
             val session = Prefs.session(context)
@@ -122,6 +124,7 @@ object ChargeScheduler {
         val info = BatteryUtils.read(context)
         val now = System.currentTimeMillis()
         if (!info.plugged) {
+            ensureMonitor(context, retrySoon = false)
             // لا جلسة نشطة: المهمة مجدولة أصلاً وننتظر التوصيل
             if (Prefs.session(context).startTime == 0L) return
             // قد يكون تذبذباً عابراً: لا ننهي الجلسة قبل أن يستمر الفصل فترة قصيرة
@@ -158,7 +161,6 @@ object ChargeScheduler {
     private fun endSession(context: Context) {
         DebugLog.add(context, "session end (not charging)")
         unplugSeenAt = 0L
-        BatteryMonitorService.stop(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
         Notifications.cancelAlert(context)

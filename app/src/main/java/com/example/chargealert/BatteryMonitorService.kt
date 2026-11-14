@@ -53,7 +53,7 @@ class BatteryMonitorService : Service() {
             DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged} gap=${gap}s")
             if (!info.plugged && ChargeScheduler.isUnplugConfirmed(service)) {
                 ChargeScheduler.onUnplugged(service)
-                service.stopSelf()
+                service.syncWork()
                 return
             }
             service.ensureNotificationShown(info.percent)
@@ -80,8 +80,6 @@ class BatteryMonitorService : Service() {
             stopSelf()
             return
         }
-        // لا نوقف الخدمة فوراً إذا بدا الشاحن مفصولاً: قد يكون تذبذباً عابراً، والفحص المؤجل يحسم الأمر
-        if (!info.plugged) ChargeScheduler.isUnplugConfirmed(this)
 
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -96,10 +94,10 @@ class BatteryMonitorService : Service() {
                     updateNotification(current.percent)
                     ChargeScheduler.check(context)
                     syncWork()
-                } else if (ChargeScheduler.isUnplugConfirmed(context)) {
-                    // Charger removed: end the session and remove the persistent notification.
-                    ChargeScheduler.onUnplugged(context)
-                    stopSelf()
+                } else {
+                    // الشاحن مفصول: ننهي الجلسة بعد التأكد، والخدمة تبقى تعمل بانتظار التوصيل التالي
+                    if (ChargeScheduler.isUnplugConfirmed(context)) ChargeScheduler.onUnplugged(context)
+                    syncWork()
                 }
             }
         }.also {
@@ -116,7 +114,7 @@ class BatteryMonitorService : Service() {
 
     /** يبقي المعالج مستيقظاً ويفحص كل 20 ثانية إلى أن يصدر التنبيه */
     private fun syncWork() {
-        if (Prefs.alertedAt(this) != 0L) {
+        if (!BatteryUtils.read(this).plugged || Prefs.alertedAt(this) != 0L) {
             handler.removeCallbacks(poll)
             pollScheduled = false
             releaseWakeLock()
@@ -163,19 +161,16 @@ class BatteryMonitorService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun buildNotification(percent: Int): Notification {
-        val threshold = Prefs.threshold(this)
-        shownPercent = percent
-        shownThreshold = threshold
+    /** إشعار بلا نص قدر الإمكان: أهمية دنيا، بلا صوت، مخفي في شاشة القفل */
+    private fun buildNotification(@Suppress("UNUSED_PARAMETER") percent: Int): Notification {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_battery)
-            .setContentTitle(getString(R.string.monitor_notification_title))
-            .setContentText(getString(R.string.monitor_notification_progress, percent, threshold))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .setVisibility(Notification.VISIBILITY_SECRET)
             .apply {
-                // أندرويد 12+ يؤخر إظهار إشعار الخدمة حتى 10 ثوانٍ ما لم نطلب إظهاره فوراً
                 if (Build.VERSION.SDK_INT >= 31) {
                     setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
                 }
@@ -215,29 +210,33 @@ class BatteryMonitorService : Service() {
         }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun updateNotification(percent: Int) {
-        if (percent == shownPercent && Prefs.threshold(this) == shownThreshold) return
-        runCatching {
-            getSystemService(NotificationManager::class.java)
-                .notify(NOTIFICATION_ID, buildNotification(percent))
-        }
+        // الإشعار ثابت وبلا نص، فلا شيء يحتاج إلى تحديث
     }
 
     private fun createMonitorChannel() {
         val nm = getSystemService(NotificationManager::class.java)
-        // قناة جديدة بدل القديمة: إن كان المستخدم قد أوقف القديمة فلن يظهر الإشعار الدائم أبداً
         nm.deleteNotificationChannel(OLD_CHANNEL_ID)
+        nm.deleteNotificationChannel(PREVIOUS_CHANNEL_ID)
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.monitor_notification_channel),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply { setShowBadge(false) }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            setShowBadge(false)
+            setSound(null, null)
+            enableVibration(false)
+            enableLights(false)
+            lockscreenVisibility = Notification.VISIBILITY_SECRET
+        }
+        nm.createNotificationChannel(channel)
     }
 
     companion object {
         private const val OLD_CHANNEL_ID = "charge_monitor"
-        private const val CHANNEL_ID = "charge_monitor_v2"
+        private const val PREVIOUS_CHANNEL_ID = "charge_monitor_v2"
+        private const val CHANNEL_ID = "charge_monitor_v3"
         private const val NOTIFICATION_ID = 3
         private const val POLL_INTERVAL_MS = 20_000L
         private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1000L
