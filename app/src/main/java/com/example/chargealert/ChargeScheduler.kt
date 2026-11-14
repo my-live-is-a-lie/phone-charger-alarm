@@ -17,6 +17,9 @@ object ChargeScheduler {
     private const val MIN_DELAY = 30_000L
     private const val MONITOR_RETRY_DELAY = 3_000L
     private const val UNPLUG_CONFIRM_MS = 2_500L
+    // Periodic refresh, like the reference app (90 s while charging): an exact alarm that
+    // wakes the app even if the system holds back battery broadcasts with the screen off.
+    private const val REFRESH_INTERVAL_MS = 90_000L
 
     @Volatile private var unplugSeenAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -183,9 +186,16 @@ object ChargeScheduler {
         if (updateLast) {
             Prefs.setSession(context, session.copy(lastTime = now, lastPct = info.percent))
         }
-        // No alarm is scheduled here: like the reference app, the next check is triggered
-        // purely by the next BATTERY_CHANGED broadcast. Alarms are only used for the short
-        // monitor-start retry in ensureMonitor().
+        // Periodic refresh (reference-app pattern): schedule the next exact-alarm check
+        // 90 s from now. setExactAndAllowWhileIdle is used, not setAlarmClock. The alarm
+        // fires CheckReceiver, which runs check() and re-schedules the next refresh, so the
+        // threshold is caught even if battery broadcasts stop arriving with the screen off.
+        if (Prefs.alertedAt(context) == 0L) {
+            scheduleAlarm(context, REFRESH_INTERVAL_MS, urgent = false)
+        } else {
+            // Alert already sent: no more refresh needed.
+            cancelAlarm(context)
+        }
     }
 
     private fun scheduleJob(context: Context) {
