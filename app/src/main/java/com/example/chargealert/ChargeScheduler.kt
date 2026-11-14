@@ -7,6 +7,8 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 
 object ChargeScheduler {
@@ -20,11 +22,14 @@ object ChargeScheduler {
     private const val MIN_DELAY = 30_000L
     private const val MAX_DELAY = 15 * MINUTE
     private const val MONITOR_RETRY_DELAY = 3_000L
+    private const val UNPLUG_CONFIRM_MS = 2_500L
+
+    @Volatile private var unplugSeenAt = 0L
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun start(context: Context) {
         if (!Prefs.isEnabled(context)) return
-        var info = BatteryUtils.read(context)
-        if (!info.plugged) info = debounceUnplug(context)
+        val info = BatteryUtils.read(context)
         if (info.plugged) {
             val session = Prefs.session(context)
             if (session.startTime == 0L) {
@@ -49,10 +54,10 @@ object ChargeScheduler {
 
     fun onPlugged(context: Context) {
         if (!Prefs.isEnabled(context)) return
-        var info = BatteryUtils.read(context)
-        if (!info.plugged) info = debounceUnplug(context)
+        val info = BatteryUtils.read(context)
         if (!info.plugged) {
-            endSession(context)
+            // تذبذب عابر لحظة التوصيل: نعيد جدولة المهمة وننتظر
+            scheduleJob(context)
             return
         }
         val session = Prefs.session(context)
@@ -65,23 +70,26 @@ object ChargeScheduler {
     }
 
     /**
-     * عند توصيل الشاحن تتذبذب حالة "متصل" لجزء من الثانية بسبب مصافحة الشحن السريع، فكان
-     * التطبيق يعتبرها فصلاً حقيقياً ويوقف الخدمة. ننتظر حتى ثانيتين ونصف قبل الجزم بالفصل.
+     * عند توصيل الشاحن تتذبذب حالة "متصل" لثوانٍ بسبب مصافحة الشحن، فلا نعتبر الفصل حقيقياً
+     * إلا إذا استمر 2.5 ثانية. بدون انتظار أو تجميد للواجهة: أول ملاحظة تسجّل الوقت وتجدول فحصاً
+     * بعد قليل، والفحص التالي يحسم الأمر.
      */
-    fun debounceUnplug(context: Context): BatteryInfo {
-        var info = BatteryUtils.read(context)
-        var tries = 0
-        while (!info.plugged && tries < 5) {
-            Thread.sleep(500)
-            info = BatteryUtils.read(context)
-            tries++
+    fun isUnplugConfirmed(context: Context): Boolean {
+        val info = BatteryUtils.read(context)
+        if (info.plugged) {
+            unplugSeenAt = 0L
+            return false
         }
-        if (tries > 0) DebugLog.add(context, "unplug debounce: plugged=${info.plugged} after ${tries * 500}ms")
-        return info
+        val now = SystemClock.elapsedRealtime()
+        if (unplugSeenAt == 0L) {
+            unplugSeenAt = now
+            DebugLog.add(context, "unplug suspected, confirming in ${UNPLUG_CONFIRM_MS}ms")
+            val app = context.applicationContext
+            mainHandler.postDelayed({ check(app) }, UNPLUG_CONFIRM_MS + 300)
+            return false
+        }
+        return now - unplugSeenAt >= UNPLUG_CONFIRM_MS
     }
-
-    /** true إذا بقي الشاحن مفصولاً بعد فترة الانتظار */
-    fun confirmUnplugged(context: Context): Boolean = !debounceUnplug(context).plugged
 
     fun onUnplugged(context: Context) {
         if (Prefs.isEnabled(context)) endSession(context)
@@ -111,13 +119,17 @@ object ChargeScheduler {
             stop(context)
             return
         }
-        var info = BatteryUtils.read(context)
+        val info = BatteryUtils.read(context)
         val now = System.currentTimeMillis()
-        if (!info.plugged) info = debounceUnplug(context)
         if (!info.plugged) {
+            // لا جلسة نشطة: المهمة مجدولة أصلاً وننتظر التوصيل
+            if (Prefs.session(context).startTime == 0L) return
+            // قد يكون تذبذباً عابراً: لا ننهي الجلسة قبل أن يستمر الفصل فترة قصيرة
+            if (!isUnplugConfirmed(context)) return
             endSession(context)
             return
         }
+        unplugSeenAt = 0L
         val session = Prefs.session(context)
         if (session.startTime == 0L || info.percent < session.lastPct - 1) {
             beginSession(context, info, now)
@@ -145,6 +157,7 @@ object ChargeScheduler {
 
     private fun endSession(context: Context) {
         DebugLog.add(context, "session end (not charging)")
+        unplugSeenAt = 0L
         BatteryMonitorService.stop(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)

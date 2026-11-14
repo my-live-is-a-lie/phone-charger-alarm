@@ -51,7 +51,7 @@ class BatteryMonitorService : Service() {
             val gap = if (lastPollAt == 0L) 0L else (nowElapsed - lastPollAt) / 1000
             lastPollAt = nowElapsed
             DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged} gap=${gap}s")
-            if (!info.plugged && ChargeScheduler.confirmUnplugged(service)) {
+            if (!info.plugged && ChargeScheduler.isUnplugConfirmed(service)) {
                 ChargeScheduler.onUnplugged(service)
                 service.stopSelf()
                 return
@@ -76,12 +76,12 @@ class BatteryMonitorService : Service() {
         handler.postDelayed({ logNotificationState("1.5s later") }, 1500)
 
         // Nothing to watch: monitoring is off or the charger is not connected.
-        val plugged = info.plugged || ChargeScheduler.debounceUnplug(this).plugged
-        if (!Prefs.isEnabled(this) || !plugged) {
-            if (Prefs.isEnabled(this)) ChargeScheduler.onUnplugged(this)
+        if (!Prefs.isEnabled(this)) {
             stopSelf()
             return
         }
+        // لا نوقف الخدمة فوراً إذا بدا الشاحن مفصولاً: قد يكون تذبذباً عابراً، والفحص المؤجل يحسم الأمر
+        if (!info.plugged) ChargeScheduler.isUnplugConfirmed(this)
 
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -96,7 +96,7 @@ class BatteryMonitorService : Service() {
                     updateNotification(current.percent)
                     ChargeScheduler.check(context)
                     syncWork()
-                } else if (ChargeScheduler.confirmUnplugged(context)) {
+                } else if (ChargeScheduler.isUnplugConfirmed(context)) {
                     // Charger removed: end the session and remove the persistent notification.
                     ChargeScheduler.onUnplugged(context)
                     stopSelf()
@@ -174,6 +174,12 @@ class BatteryMonitorService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .apply {
+                // أندرويد 12+ يؤخر إظهار إشعار الخدمة حتى 10 ثوانٍ ما لم نطلب إظهاره فوراً
+                if (Build.VERSION.SDK_INT >= 31) {
+                    setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+                }
+            }
             .build()
     }
 
