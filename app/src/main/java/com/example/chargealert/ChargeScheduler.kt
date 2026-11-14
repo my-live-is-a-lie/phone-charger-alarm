@@ -228,7 +228,13 @@ object ChargeScheduler {
         val intent = Intent(context, BatteryMonitorService::class.java).apply {
             putExtra(BatteryMonitorService.EXTRA_REFRESH, true)
         }
-        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        // Match the reference app exactly: FLAG_MUTABLE | FLAG_CANCEL_CURRENT.
+        // (FLAG_MUTABLE exists from API 31; on older versions the bit is ignored.)
+        val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+        } else {
+            PendingIntent.FLAG_CANCEL_CURRENT
+        }
         return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             PendingIntent.getForegroundService(context, REFRESH_REQUEST, intent, flags)
         } else {
