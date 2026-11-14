@@ -4,6 +4,7 @@ package com.example.chargealert
 
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.media.AudioAttributes
 import android.media.Ringtone
 import android.media.RingtoneManager
@@ -57,6 +58,13 @@ import kotlinx.coroutines.delay
 
 class AlertOverlayActivity : ComponentActivity() {
     private var alertRingtone: Ringtone? = null
+    private var screenLock: PowerManager.WakeLock? = null
+
+    companion object {
+        /** هل شاشة التنبيه مفتوحة الآن؟ (للتشخيص في السجل فقط) */
+        @Volatile var shown = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DebugLog.add(this, "overlay onCreate ${DebugLog.screenState(this)}")
@@ -65,7 +73,24 @@ class AlertOverlayActivity : ComponentActivity() {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        shown = true
+        // الأعلام القديمة تعمل على الأجهزة التي تتجاهل setTurnScreenOn / setShowWhenLocked.
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+        )
+        // نوقظ الشاشة من داخل الشاشة نفسها أيضاً، فهذه أضمن لحظة لأن النشاط صار ظاهراً للنظام.
+        runCatching {
+            val pm = getSystemService(PowerManager::class.java)
+            @Suppress("DEPRECATION")
+            val lock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "chargealert:overlay"
+            )
+            lock.acquire(30_000L)
+            screenLock = lock
+        }
         startAlertSound()
         enableEdgeToEdge()
         setContent {
@@ -122,6 +147,9 @@ class AlertOverlayActivity : ComponentActivity() {
 
     override fun onDestroy() {
         DebugLog.add(this, "overlay onDestroy")
+        shown = false
+        runCatching { if (screenLock?.isHeld == true) screenLock?.release() }
+        screenLock = null
         stopAlertSound()
         super.onDestroy()
     }

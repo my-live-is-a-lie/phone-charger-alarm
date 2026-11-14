@@ -9,6 +9,8 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -55,6 +57,8 @@ object Notifications {
         )
 
     fun alert(context: Context, percent: Int) {
+        // أول شيء: إيقاظ الشاشة قبل أي عمل بطيء (تجهيز الصوت وغيره)، فبعض الأجهزة تعيد النوم سريعاً.
+        wakeScreen(context)
         createChannels(context)
         run {
             val nm = context.getSystemService(NotificationManager::class.java)
@@ -88,12 +92,14 @@ object Notifications {
             .build()
             .apply { flags = flags or Notification.FLAG_INSISTENT }
         runCatching {
-            context.getSystemService(NotificationManager::class.java).notify(ID_ALERT, notification)
+            val nm = context.getSystemService(NotificationManager::class.java)
+            // إشعار قديم بنفس المعرّف يجعل النظام يعامل الإرسال كتحديث فلا يُطلق شاشة التنبيه الكاملة.
+            nm.cancel(ID_ALERT)
+            nm.notify(ID_ALERT, notification)
             DebugLog.add(context, "alert notification posted")
         }.onFailure { DebugLog.add(context, "alert notify FAILED: ${it.javaClass.simpleName}") }
 
         AlarmPlayer.start(context)
-        wakeScreen(context)
 
         if (Settings.canDrawOverlays(context)) {
             runCatching {
@@ -105,6 +111,18 @@ object Notifications {
                 DebugLog.add(context, "overlay startActivity called")
             }.onFailure { DebugLog.add(context, "overlay startActivity FAILED: ${it.javaClass.simpleName}") }
         }
+
+        // بعد ثانيتين ونصف: إن لم تُضَأ الشاشة أو لم تظهر شاشة التنبيه نعيد محاولة الإيقاظ، ونسجّل
+        // الحالة الفعلية في السجل لنعرف أي خطوة فشلت على هذا الجهاز.
+        val app = context.applicationContext
+        Handler(Looper.getMainLooper()).postDelayed({
+            val pm = app.getSystemService(PowerManager::class.java)
+            if (!pm.isInteractive) wakeScreen(app)
+            DebugLog.add(
+                app,
+                "alert +2.5s: overlayShown=${AlertOverlayActivity.shown} ${DebugLog.screenState(app)}"
+            )
+        }, 2_500L)
     }
 
     /** يوقظ الشاشة لثوانٍ عند التنبيه حتى لو كانت مغلقة */
@@ -118,7 +136,7 @@ object Notifications {
                     PowerManager.ON_AFTER_RELEASE,
                 "chargealert:alert"
             )
-            lock.acquire(10_000L)
+            lock.acquire(30_000L)
             DebugLog.add(context, "screen wake requested")
         }.onFailure { DebugLog.add(context, "screen wake FAILED: ${it.javaClass.simpleName}") }
     }
