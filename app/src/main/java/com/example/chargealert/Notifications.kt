@@ -18,6 +18,9 @@ object Notifications {
     const val ID_ALERT = 2
     const val EXTRA_PERCENT = "extra_battery_percent"
 
+    /** True from alert() until cancelAlert(): the 5 s retry loop runs only while this is set. */
+    @Volatile private var alertActive = false
+
     /** قناة التنبيه صامتة عمداً: الصوت والاهتزاز يتولاهما AlarmPlayer */
     private fun channelId(@Suppress("UNUSED_PARAMETER") context: Context): String = "alert_silent_v1"
 
@@ -55,6 +58,7 @@ object Notifications {
         )
 
     fun alert(context: Context, percent: Int) {
+        alertActive = true
         // أول شيء: إيقاظ الشاشة قبل أي عمل بطيء (تجهيز الصوت وغيره)، فبعض الأجهزة تعيد النوم سريعاً.
         wakeScreen(context)
         createChannels(context)
@@ -110,17 +114,38 @@ object Notifications {
             }.onFailure { DebugLog.add(context, "overlay startActivity FAILED: ${it.javaClass.simpleName}") }
         }
 
-        // بعد ثانيتين ونصف: إن لم تُضَأ الشاشة أو لم تظهر شاشة التنبيه نعيد محاولة الإيقاظ، ونسجّل
-        // الحالة الفعلية في السجل لنعرف أي خطوة فشلت على هذا الجهاز.
+        // Reference-app pattern: while the alert is active and the overlay is not showing,
+        // retry the launch every 5 s (a swallowed full-screen intent / activity start is
+        // retried, not lost). Stops as soon as the overlay shows or the alert is dismissed.
         val app = context.applicationContext
-        Handler(Looper.getMainLooper()).postDelayed({
-            val pm = app.getSystemService(PowerManager::class.java)
-            if (!pm.isInteractive) wakeScreen(app)
-            DebugLog.add(
-                app,
-                "alert +2.5s: overlayShown=${AlertOverlayActivity.shown} ${DebugLog.screenState(app)}"
-            )
-        }, 2_500L)
+        val retry = object : Runnable {
+            override fun run() {
+                if (!alertActive) return
+                if (AlertOverlayActivity.shown) {
+                    DebugLog.add(app, "alert retry: overlay is showing, loop stops")
+                    return
+                }
+                val pm = app.getSystemService(PowerManager::class.java)
+                if (!pm.isInteractive) wakeScreen(app)
+                AlarmPlayer.start(app)
+                if (Settings.canDrawOverlays(app)) {
+                    runCatching {
+                        app.startActivity(
+                            Intent(app, AlertOverlayActivity::class.java)
+                                .putExtra(EXTRA_PERCENT, percent)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        )
+                        DebugLog.add(app, "alert retry: overlay startActivity called")
+                    }.onFailure { DebugLog.add(app, "alert retry: overlay start FAILED: ${it.javaClass.simpleName}") }
+                }
+                DebugLog.add(
+                    app,
+                    "alert retry +5s: overlayShown=${AlertOverlayActivity.shown} ${DebugLog.screenState(app)}"
+                )
+                Handler(Looper.getMainLooper()).postDelayed(this, 5_000L)
+            }
+        }
+        Handler(Looper.getMainLooper()).postDelayed(retry, 5_000L)
     }
 
     /** يوقظ الشاشة عند التنبيه — نفس نهج التطبيق المرجعي: قفل شاشة خافت مع إيقاظ، فقط إذا كانت الشاشة مقفلة أو غير مضيئة */
@@ -141,6 +166,7 @@ object Notifications {
     }
 
     fun cancelAlert(context: Context) {
+        alertActive = false
         AlarmPlayer.stop(context)
         context.getSystemService(NotificationManager::class.java).cancel(ID_ALERT)
     }
