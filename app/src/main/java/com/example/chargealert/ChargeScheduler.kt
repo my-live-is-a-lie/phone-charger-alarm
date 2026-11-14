@@ -23,7 +23,8 @@ object ChargeScheduler {
 
     fun start(context: Context) {
         if (!Prefs.isEnabled(context)) return
-        val info = BatteryUtils.read(context)
+        var info = BatteryUtils.read(context)
+        if (!info.plugged) info = debounceUnplug(context)
         if (info.plugged) {
             val session = Prefs.session(context)
             if (session.startTime == 0L) {
@@ -48,7 +49,8 @@ object ChargeScheduler {
 
     fun onPlugged(context: Context) {
         if (!Prefs.isEnabled(context)) return
-        val info = BatteryUtils.read(context)
+        var info = BatteryUtils.read(context)
+        if (!info.plugged) info = debounceUnplug(context)
         if (!info.plugged) {
             endSession(context)
             return
@@ -61,6 +63,25 @@ object ChargeScheduler {
         }
         ensureMonitor(context, retrySoon = true)
     }
+
+    /**
+     * عند توصيل الشاحن تتذبذب حالة "متصل" لجزء من الثانية بسبب مصافحة الشحن السريع، فكان
+     * التطبيق يعتبرها فصلاً حقيقياً ويوقف الخدمة. ننتظر حتى ثانيتين ونصف قبل الجزم بالفصل.
+     */
+    fun debounceUnplug(context: Context): BatteryInfo {
+        var info = BatteryUtils.read(context)
+        var tries = 0
+        while (!info.plugged && tries < 5) {
+            Thread.sleep(500)
+            info = BatteryUtils.read(context)
+            tries++
+        }
+        if (tries > 0) DebugLog.add(context, "unplug debounce: plugged=${info.plugged} after ${tries * 500}ms")
+        return info
+    }
+
+    /** true إذا بقي الشاحن مفصولاً بعد فترة الانتظار */
+    fun confirmUnplugged(context: Context): Boolean = !debounceUnplug(context).plugged
 
     fun onUnplugged(context: Context) {
         if (Prefs.isEnabled(context)) endSession(context)
@@ -90,8 +111,9 @@ object ChargeScheduler {
             stop(context)
             return
         }
-        val info = BatteryUtils.read(context)
+        var info = BatteryUtils.read(context)
         val now = System.currentTimeMillis()
+        if (!info.plugged) info = debounceUnplug(context)
         if (!info.plugged) {
             endSession(context)
             return

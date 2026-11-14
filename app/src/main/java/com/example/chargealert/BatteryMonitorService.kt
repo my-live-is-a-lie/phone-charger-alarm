@@ -51,7 +51,7 @@ class BatteryMonitorService : Service() {
             val gap = if (lastPollAt == 0L) 0L else (nowElapsed - lastPollAt) / 1000
             lastPollAt = nowElapsed
             DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged} gap=${gap}s")
-            if (!info.plugged) {
+            if (!info.plugged && ChargeScheduler.confirmUnplugged(service)) {
                 ChargeScheduler.onUnplugged(service)
                 service.stopSelf()
                 return
@@ -73,9 +73,11 @@ class BatteryMonitorService : Service() {
         val notification = buildNotification(info.percent)
         startAsForeground(notification)
         logNotificationState("service created")
+        handler.postDelayed({ logNotificationState("1.5s later") }, 1500)
 
         // Nothing to watch: monitoring is off or the charger is not connected.
-        if (!Prefs.isEnabled(this) || !info.plugged) {
+        val plugged = info.plugged || ChargeScheduler.debounceUnplug(this).plugged
+        if (!Prefs.isEnabled(this) || !plugged) {
             if (Prefs.isEnabled(this)) ChargeScheduler.onUnplugged(this)
             stopSelf()
             return
@@ -94,7 +96,7 @@ class BatteryMonitorService : Service() {
                     updateNotification(current.percent)
                     ChargeScheduler.check(context)
                     syncWork()
-                } else {
+                } else if (ChargeScheduler.confirmUnplugged(context)) {
                     // Charger removed: end the session and remove the persistent notification.
                     ChargeScheduler.onUnplugged(context)
                     stopSelf()
