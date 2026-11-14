@@ -27,6 +27,20 @@ object DebugLog {
         }
     }
 
+    /** حالة الشاشة وقفلها لحظة الحدث */
+    fun screenState(context: Context): String {
+        val pm = context.getSystemService(android.os.PowerManager::class.java)
+        val km = context.getSystemService(android.app.KeyguardManager::class.java)
+        val bucket = runCatching {
+            context.getSystemService(android.app.usage.UsageStatsManager::class.java).appStandbyBucket
+        }.getOrNull()
+        val restricted = runCatching {
+            context.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted
+        }.getOrNull()
+        // bucket: 10 نشط، 20 مستخدم، 30 متكرر، 40 نادر، 45 مقيّد
+        return "interactive=${pm.isInteractive} locked=${km.isKeyguardLocked} bucket=$bucket restricted=$restricted"
+    }
+
     fun read(context: Context): String = prefs(context).getString(KEY, "") ?: ""
 
     @Synchronized
