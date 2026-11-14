@@ -242,22 +242,32 @@ object ChargeScheduler {
         }
     }
 
-    /** Schedules the next 90 s refresh (reference-app pattern: RTC_WAKEUP exact alarm). */
+    /**
+     * Schedules the next 90 s refresh. Uses setAlarmClock(): setExactAndAllowWhileIdle() is
+     * throttled by Doze (the log showed a 90 s refresh firing ~6 minutes late with the screen
+     * off, so the threshold was only noticed after the screen was woken manually). Alarm-clock
+     * alarms are exempt from Doze and do not need the SCHEDULE_EXACT_ALARM permission.
+     */
     private fun scheduleRefreshAlarm(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
         val triggerAt = System.currentTimeMillis() + REFRESH_INTERVAL_MS
-        if (!exact) {
-            DebugLog.add(context, "next refresh in 90s type=skipped (exact alarms not allowed)")
-            return
-        }
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAt,
-            refreshIntent(context)
+        val showIntent = PendingIntent.getActivity(
+            context,
+            REFRESH_REQUEST,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-        DebugLog.add(context, "next refresh in 90s type=exact (service)")
+        val ok = runCatching {
+            alarmManager.setAlarmClock(
+                AlarmManager.AlarmClockInfo(triggerAt, showIntent),
+                refreshIntent(context)
+            )
+        }.isSuccess
+        if (!ok) {
+            // Fallback: best-effort inexact alarm (no exact-alarm permission needed).
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, refreshIntent(context))
+        }
+        DebugLog.add(context, "next refresh in 90s type=${if (ok) "alarmClock" else "inexact"}")
     }
 
     private fun cancelRefreshAlarm(context: Context) {
