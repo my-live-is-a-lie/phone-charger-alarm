@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 
 /**
@@ -37,6 +38,7 @@ class BatteryMonitorService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var pollScheduled = false
     private var pollCount = 0
+    private var lastPollAt = 0L
 
     private val poll = object : Runnable {
         override fun run() {
@@ -44,14 +46,17 @@ class BatteryMonitorService : Service() {
             pollCount++
             val service = this@BatteryMonitorService
             val info = BatteryUtils.read(service)
-            if (pollCount % 6 == 0) {
-                DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged}")
-            }
+            // gap = الزمن الفعلي منذ الفحص السابق، ويجب أن يكون حوالي 20 ثانية إذا كان المعالج مستيقظاً
+            val nowElapsed = SystemClock.elapsedRealtime()
+            val gap = if (lastPollAt == 0L) 0L else (nowElapsed - lastPollAt) / 1000
+            lastPollAt = nowElapsed
+            DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged} gap=${gap}s")
             if (!info.plugged) {
                 ChargeScheduler.onUnplugged(service)
                 service.stopSelf()
                 return
             }
+            service.ensureNotificationShown(info.percent)
             ChargeScheduler.check(service)
             syncWork()
         }
@@ -66,15 +71,8 @@ class BatteryMonitorService : Service() {
         val info = BatteryUtils.read(this)
         DebugLog.add(this, "service created pct=${info.percent} plugged=${info.plugged} enabled=${Prefs.isEnabled(this)}")
         val notification = buildNotification(info.percent)
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startAsForeground(notification)
+        logNotificationState("service created")
 
         // Nothing to watch: monitoring is off or the charger is not connected.
         if (!Prefs.isEnabled(this) || !info.plugged) {
@@ -177,6 +175,38 @@ class BatteryMonitorService : Service() {
             .build()
     }
 
+    private fun startAsForeground(notification: Notification) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    /** يسجّل هل الإشعار الدائم ظاهر فعلاً وحالة قناته */
+    private fun logNotificationState(tag: String) {
+        val nm = getSystemService(NotificationManager::class.java)
+        val importance = nm.getNotificationChannel(CHANNEL_ID)?.importance
+        val shown = nm.activeNotifications.any { it.id == NOTIFICATION_ID }
+        DebugLog.add(
+            this,
+            "$tag: monitor notification shown=$shown channelImportance=$importance appNotifsEnabled=${nm.areNotificationsEnabled()}"
+        )
+    }
+
+    /** إذا أزال المستخدم الإشعار الدائم (أندرويد 13+ يسمح بذلك) نعيد إظهاره */
+    private fun ensureNotificationShown(percent: Int) {
+        val nm = getSystemService(NotificationManager::class.java)
+        if (nm.activeNotifications.none { it.id == NOTIFICATION_ID }) {
+            runCatching { startAsForeground(buildNotification(percent)) }
+            DebugLog.add(this, "monitor notification was missing -> re-posted")
+        }
+    }
+
     private fun updateNotification(percent: Int) {
         if (percent == shownPercent && Prefs.threshold(this) == shownThreshold) return
         runCatching {
@@ -186,6 +216,9 @@ class BatteryMonitorService : Service() {
     }
 
     private fun createMonitorChannel() {
+        val nm = getSystemService(NotificationManager::class.java)
+        // قناة جديدة بدل القديمة: إن كان المستخدم قد أوقف القديمة فلن يظهر الإشعار الدائم أبداً
+        nm.deleteNotificationChannel(OLD_CHANNEL_ID)
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.monitor_notification_channel),
@@ -195,7 +228,8 @@ class BatteryMonitorService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "charge_monitor"
+        private const val OLD_CHANNEL_ID = "charge_monitor"
+        private const val CHANNEL_ID = "charge_monitor_v2"
         private const val NOTIFICATION_ID = 3
         private const val POLL_INTERVAL_MS = 20_000L
         private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1000L
