@@ -12,55 +12,25 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.PowerManager
-import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
- * Foreground service that lives ONLY while the charger is connected.
+ * Foreground service that stays alive while monitoring is enabled.
  *
- * It is started when the charger is plugged in (and monitoring is enabled) and stops itself,
- * removing its notification, as soon as the charger is unplugged or monitoring is disabled.
- * While it runs it listens to every battery-level change, so the threshold is detected
- * immediately instead of depending on alarms the system may delay.
+ * Detection follows the reference app (Battery Charged Alarm): the threshold is detected
+ * purely from the BATTERY_CHANGED broadcast. The receiver is registered with priority 100
+ * and every broadcast is processed on a background thread via goAsync(), so the system
+ * holds the broadcast wake lock while the check runs. There is no periodic polling and no
+ * continuous wake lock — the service simply waits for the system to deliver battery
+ * changes, which keeps it light enough that the OS does not freeze it in the background.
  */
 class BatteryMonitorService : Service() {
     private var receiver: BroadcastReceiver? = null
-    private var shownPercent = -1
-    private var shownThreshold = -1
     private var lastLogged = ""
-
-    // Some phones (Infinix/XOS, Samsung...) put the CPU to sleep with the screen off and hold back
-    // both alarms and battery broadcasts, even for apps with a foreground service. While the
-    // threshold has not been reached we keep the CPU awake with a partial wake lock and poll from
-    // a Handler, which does not depend on AlarmManager or on the system delivering broadcasts.
     private val handler = Handler(Looper.getMainLooper())
-    private var wakeLock: PowerManager.WakeLock? = null
-    private var pollScheduled = false
-    private var pollCount = 0
-    private var lastPollAt = 0L
-
-    private val poll = object : Runnable {
-        override fun run() {
-            pollScheduled = false
-            pollCount++
-            val service = this@BatteryMonitorService
-            val info = BatteryUtils.read(service)
-            // gap = الزمن الفعلي منذ الفحص السابق، ويجب أن يكون حوالي 20 ثانية إذا كان المعالج مستيقظاً
-            val nowElapsed = SystemClock.elapsedRealtime()
-            val gap = if (lastPollAt == 0L) 0L else (nowElapsed - lastPollAt) / 1000
-            lastPollAt = nowElapsed
-            DebugLog.add(service, "poll #$pollCount pct=${info.percent} plugged=${info.plugged} gap=${gap}s")
-            if (!info.plugged && ChargeScheduler.isUnplugConfirmed(service)) {
-                ChargeScheduler.onUnplugged(service)
-                service.syncWork()
-                return
-            }
-            service.ensureNotificationShown(info.percent)
-            ChargeScheduler.check(service)
-            syncWork()
-        }
-    }
+    private val batteryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +45,7 @@ class BatteryMonitorService : Service() {
         logNotificationState("service created")
         handler.postDelayed({ logNotificationState("1.5s later") }, 1500)
 
-        // Nothing to watch: monitoring is off or the charger is not connected.
+        // Nothing to watch: monitoring is off.
         if (!Prefs.isEnabled(this)) {
             stopSelf()
             return
@@ -84,65 +54,39 @@ class BatteryMonitorService : Service() {
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action != Intent.ACTION_BATTERY_CHANGED) return
-                val current = BatteryUtils.parse(intent)
-                val tag = "${current.percent}/${current.plugged}"
-                if (tag != lastLogged) {
-                    lastLogged = tag
-                    DebugLog.add(context, "battery event pct=${current.percent} plugged=${current.plugged}")
-                }
-                if (current.plugged) {
-                    updateNotification(current.percent)
-                    ChargeScheduler.check(context)
-                    syncWork()
-                } else {
-                    // الشاحن مفصول: ننهي الجلسة بعد التأكد، والخدمة تبقى تعمل بانتظار التوصيل التالي
-                    if (ChargeScheduler.isUnplugConfirmed(context)) ChargeScheduler.onUnplugged(context)
-                    syncWork()
+                // Keep the broadcast wake lock held while the check runs on a background
+                // thread (same pattern as the reference app: goAsync + background task).
+                val pending = goAsync()
+                batteryExecutor.execute {
+                    try {
+                        val current = BatteryUtils.parse(intent)
+                        val tag = "${current.percent}/${current.plugged}"
+                        if (tag != lastLogged) {
+                            lastLogged = tag
+                            DebugLog.add(context, "battery event pct=${current.percent} plugged=${current.plugged}")
+                        }
+                        ensureNotificationShown(current.percent)
+                        if (current.plugged) {
+                            ChargeScheduler.check(context)
+                        } else {
+                            // الشاحن مفصول: ننهي الجلسة بعد التأكد، والخدمة تبقى تعمل بانتظار التوصيل التالي
+                            if (ChargeScheduler.isUnplugConfirmed(context)) ChargeScheduler.onUnplugged(context)
+                        }
+                    } finally {
+                        pending.finish()
+                    }
                 }
             }
         }.also {
+            val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED).apply { priority = 100 }
             ContextCompat.registerReceiver(
                 this,
                 it,
-                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                filter,
                 ContextCompat.RECEIVER_EXPORTED
             )
         }
         ChargeScheduler.check(this)
-        syncWork()
-    }
-
-    /** يبقي المعالج مستيقظاً ويفحص كل 20 ثانية إلى أن يصدر التنبيه */
-    private fun syncWork() {
-        if (!BatteryUtils.read(this).plugged || Prefs.alertedAt(this) != 0L) {
-            handler.removeCallbacks(poll)
-            pollScheduled = false
-            releaseWakeLock()
-            return
-        }
-        if (wakeLock?.isHeld != true) acquireWakeLock()
-        if (!pollScheduled) {
-            pollScheduled = true
-            handler.postDelayed(poll, POLL_INTERVAL_MS)
-        }
-    }
-
-    private fun acquireWakeLock() {
-        runCatching {
-            val pm = getSystemService(PowerManager::class.java)
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "chargealert:monitor").apply {
-                setReferenceCounted(false)
-                acquire(WAKE_LOCK_TIMEOUT_MS)
-            }
-            DebugLog.add(this, "wakelock acquired")
-        }.onFailure { DebugLog.add(this, "wakelock FAILED: ${it.javaClass.simpleName}") }
-    }
-
-    private fun releaseWakeLock() {
-        val lock = wakeLock ?: return
-        runCatching { if (lock.isHeld) lock.release() }
-        wakeLock = null
-        DebugLog.add(this, "wakelock released")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -151,7 +95,7 @@ class BatteryMonitorService : Service() {
         running = false
         DebugLog.add(this, "service destroyed")
         handler.removeCallbacksAndMessages(null)
-        releaseWakeLock()
+        batteryExecutor.shutdownNow()
         receiver?.let { runCatching { unregisterReceiver(it) } }
         receiver = null
         // Make sure the status-bar notification disappears together with the service.
@@ -210,11 +154,6 @@ class BatteryMonitorService : Service() {
         }
     }
 
-    @Suppress("UNUSED_PARAMETER")
-    private fun updateNotification(percent: Int) {
-        // الإشعار ثابت وبلا نص، فلا شيء يحتاج إلى تحديث
-    }
-
     private fun createMonitorChannel() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel(OLD_CHANNEL_ID)
@@ -238,8 +177,6 @@ class BatteryMonitorService : Service() {
         private const val PREVIOUS_CHANNEL_ID = "charge_monitor_v2"
         private const val CHANNEL_ID = "charge_monitor_v3"
         private const val NOTIFICATION_ID = 3
-        private const val POLL_INTERVAL_MS = 20_000L
-        private const val WAKE_LOCK_TIMEOUT_MS = 6 * 60 * 60 * 1000L
 
         @Volatile private var running = false
         @Volatile private var starting = false

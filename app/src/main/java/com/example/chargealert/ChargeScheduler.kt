@@ -14,13 +14,7 @@ import android.os.SystemClock
 object ChargeScheduler {
     private const val JOB_ID = 1001
     private const val ALARM_REQUEST = 2001
-    private const val MINUTE = 60_000L
-    private const val MIN_RATE = 15_000L
-    private const val MAX_RATE = 10 * MINUTE
-    private const val FIRST_MEASURE_MAX = 5 * MINUTE
-    private const val EXACT_WINDOW = 12 * MINUTE
     private const val MIN_DELAY = 30_000L
-    private const val MAX_DELAY = 15 * MINUTE
     private const val MONITOR_RETRY_DELAY = 3_000L
     private const val UNPLUG_CONFIRM_MS = 2_500L
 
@@ -180,7 +174,6 @@ object ChargeScheduler {
             if (Prefs.alertedAt(context) == 0L) {
                 Prefs.setAlertedAt(context, now)
                 DebugLog.add(context, "THRESHOLD REACHED pct=${info.percent} threshold=$threshold -> alert")
-                learnRate(context, info, session, now)
                 Notifications.alert(context, info.percent)
             }
         } else if (Prefs.alertedAt(context) != 0L) {
@@ -190,62 +183,9 @@ object ChargeScheduler {
         if (updateLast) {
             Prefs.setSession(context, session.copy(lastTime = now, lastPct = info.percent))
         }
-
-        val alertedAt = Prefs.alertedAt(context)
-        val delay = if (alertedAt != 0L) {
-            2 * MINUTE
-        } else {
-            nextDelay(context, info, session, now, threshold)
-        }
-        // قبل التنبيه: منبّه من نوع alarmClock لأنه لا يتأخر والشاشة مغلقة. بعد التنبيه يكفي منبّه عادي.
-        scheduleAlarm(context, delay, urgent = alertedAt == 0L)
-    }
-
-    private fun nextDelay(
-        context: Context,
-        info: BatteryInfo,
-        session: Prefs.Session,
-        now: Long,
-        threshold: Int
-    ): Long {
-        val remaining = (threshold - info.percent).coerceAtLeast(1)
-        val recentDelta = info.percent - session.lastPct
-        val recentTime = now - session.lastTime
-        val sessionDelta = info.percent - session.startPct
-        val sessionTime = now - session.startTime
-        val prior = Prefs.learnedRate(context)
-        val measured = recentDelta >= 2 || sessionDelta >= 2
-        val rate = when {
-            recentDelta >= 2 -> recentTime / recentDelta
-            sessionDelta >= 2 -> sessionTime / sessionDelta
-            sessionTime > 10 * MINUTE -> maxOf(prior, sessionTime / (sessionDelta.coerceAtLeast(0) + 1))
-            else -> prior
-        }.coerceIn(MIN_RATE, MAX_RATE)
-        val estimate = remaining * rate
-        val estimateDelay = when {
-            estimate <= EXACT_WINDOW -> estimate
-            !measured -> minOf(FIRST_MEASURE_MAX, estimate / 2)
-            else -> estimate * 8 / 10
-        }
-
-        // Estimates based on a default or stale charging rate can be far too slow near
-        // the target (for example, 72% -> 75% could otherwise sleep for five minutes).
-        // Tighten polling as the target approaches so a faster-than-expected charge is
-        // detected promptly, even before we have enough samples to learn its rate.
-        val proximityLimit = when {
-            remaining <= 5 -> MIN_DELAY
-            remaining <= 10 -> 2 * MINUTE
-            else -> MAX_DELAY
-        }
-        return estimateDelay.coerceIn(MIN_DELAY, minOf(MAX_DELAY, proximityLimit))
-    }
-
-    private fun learnRate(context: Context, info: BatteryInfo, session: Prefs.Session, now: Long) {
-        val delta = info.percent - session.startPct
-        if (delta < 2) return
-        val sample = ((now - session.startTime) / delta).coerceIn(MIN_RATE, MAX_RATE)
-        val old = Prefs.learnedRate(context)
-        Prefs.setLearnedRate(context, (old + sample) / 2)
+        // No alarm is scheduled here: like the reference app, the next check is triggered
+        // purely by the next BATTERY_CHANGED broadcast. Alarms are only used for the short
+        // monitor-start retry in ensureMonitor().
     }
 
     private fun scheduleJob(context: Context) {

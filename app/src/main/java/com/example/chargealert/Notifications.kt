@@ -1,5 +1,6 @@
 package com.example.chargealert
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -52,7 +53,7 @@ object Notifications {
             0,
             Intent(context, AlertOverlayActivity::class.java)
                 .putExtra(EXTRA_PERCENT, percent)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -106,7 +107,7 @@ object Notifications {
                 context.startActivity(
                     Intent(context, AlertOverlayActivity::class.java)
                         .putExtra(EXTRA_PERCENT, percent)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 )
                 DebugLog.add(context, "overlay startActivity called")
             }.onFailure { DebugLog.add(context, "overlay startActivity FAILED: ${it.javaClass.simpleName}") }
@@ -125,19 +126,20 @@ object Notifications {
         }, 2_500L)
     }
 
-    /** يوقظ الشاشة لثوانٍ عند التنبيه حتى لو كانت مغلقة */
+    /** يوقظ الشاشة عند التنبيه — نفس نهج التطبيق المرجعي: قفل شاشة خافت مع إيقاظ، فقط إذا كانت الشاشة مقفلة أو غير مضيئة */
     @Suppress("DEPRECATION")
     private fun wakeScreen(context: Context) {
         runCatching {
             val pm = context.getSystemService(PowerManager::class.java)
+            val km = context.getSystemService(KeyguardManager::class.java)
+            // لا حاجة للإيقاظ إذا كانت الشاشة مضيئة وغير مقفلة
+            if (pm.isInteractive && km?.isKeyguardLocked != true) return
             val lock = pm.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE,
-                "chargealert:alert"
+                PowerManager.SCREEN_DIM_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "chargealert:launching"
             )
-            lock.acquire(30_000L)
-            DebugLog.add(context, "screen wake requested")
+            lock.acquire(5_000L)
+            DebugLog.add(context, "screen wake requested (dim)")
         }.onFailure { DebugLog.add(context, "screen wake FAILED: ${it.javaClass.simpleName}") }
     }
 
