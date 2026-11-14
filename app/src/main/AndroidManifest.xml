@@ -20,6 +20,7 @@
             </intent-filter>
         </activity>
         <service android:name=".PlugJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service android:name=".PollJobService" android:exported="false" android:permission="android.permission.BIND_JOB_SERVICE" />
         <service android:name=".BatteryMonitorService" android:exported="false" android:directBootAware="true" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Continuously monitor battery level and alert at the user's chosen charge threshold" />
         </service>

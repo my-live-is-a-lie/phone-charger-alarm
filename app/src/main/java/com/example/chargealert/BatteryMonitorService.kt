@@ -104,7 +104,7 @@ class BatteryMonitorService : Service() {
         // off. The direct check() is a safety net in case that delivery is delayed.
         if (intent?.getBooleanExtra(EXTRA_REFRESH, false) == true) {
             registerBatteryReceiver()
-            DebugLog.add(this, "refresh: receiver re-registered")
+            DebugLog.add(this, "refresh: receiver re-registered late=${ChargeScheduler.refreshLateSeconds(this)}s")
             ChargeScheduler.check(this)
         }
         return START_STICKY

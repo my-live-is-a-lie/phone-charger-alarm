@@ -22,6 +22,16 @@ object ChargeScheduler {
     // wakes the app even if the system holds back battery broadcasts with the screen off.
     private const val REFRESH_INTERVAL_MS = 90_000L
 
+    // فحص عبر JobScheduler بجانب المنبّهات: مؤقتات النظام لا يؤخرها نظام الهاتف
+    private const val POLL_JOB_A = 1101
+    private const val POLL_JOB_B = 1102
+    private const val POLL_DELAY_MS = 30_000L
+    private const val POLL_AFTER_ALERT_DELAY_MS = 60_000L
+    private const val POLL_DEADLINE_SLACK_MS = 20_000L
+    private const val KEY_POLL_TOGGLE = "poll_toggle"
+    private const val KEY_POLL_DUE = "poll_due_elapsed"
+    private const val KEY_REFRESH_DUE = "refresh_due_wall"
+
     @Volatile private var unplugSeenAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -48,6 +58,7 @@ object ChargeScheduler {
         context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
         cancelAlarm(context)
         cancelRefreshAlarm(context)
+        cancelPollJobs(context)
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
         Notifications.cancelAlert(context)
@@ -87,6 +98,8 @@ object ChargeScheduler {
             DebugLog.add(context, "unplug suspected, confirming in ${UNPLUG_CONFIRM_MS}ms")
             val app = context.applicationContext
             mainHandler.postDelayed({ check(app) }, UNPLUG_CONFIRM_MS + 300)
+            // نسخة احتياطية عبر JobScheduler إذا جُمّدت العملية قبل تنفيذ الفحص المؤجل
+            schedulePollJob(app, 4_000L, requireCharging = false)
             return false
         }
         return now - unplugSeenAt >= UNPLUG_CONFIRM_MS
@@ -165,6 +178,7 @@ object ChargeScheduler {
         Notifications.cancelAlert(context)
         cancelAlarm(context)
         cancelRefreshAlarm(context)
+        cancelPollJobs(context)
         scheduleJob(context)
     }
 
@@ -196,10 +210,53 @@ object ChargeScheduler {
         // even if broadcasts stop arriving with the screen off.
         if (Prefs.alertedAt(context) == 0L) {
             scheduleRefreshAlarm(context)
+            schedulePollJob(context, POLL_DELAY_MS)
         } else {
             // Alert already sent: no more refresh needed.
             cancelRefreshAlarm(context)
+            // فحص أبطأ فقط لاكتشاف الفصل وإيقاف صوت التنبيه
+            schedulePollJob(context, POLL_AFTER_ALERT_DELAY_MS)
         }
+    }
+
+    /** يجدول الفحص التالي كمهمة JobScheduler (معرّفان بالتناوب حتى لا تُلغى المهمة الجارية) */
+    fun schedulePollJob(context: Context, delayMs: Long, requireCharging: Boolean = true) {
+        val scheduler = context.getSystemService(JobScheduler::class.java)
+        val prefs = Prefs.of(context)
+        val toggle = prefs.getInt(KEY_POLL_TOGGLE, 0)
+        val id = if (toggle == 0) POLL_JOB_A else POLL_JOB_B
+        val other = if (toggle == 0) POLL_JOB_B else POLL_JOB_A
+        runCatching { scheduler.cancel(other) }
+        val job = JobInfo.Builder(id, ComponentName(context, PollJobService::class.java))
+            .setMinimumLatency(delayMs)
+            // موعد أقصى: تُنفَّذ المهمة حتى لو لم يتحقق شرط الشحن، فيحسم الفحص الأمر
+            .setOverrideDeadline(delayMs + POLL_DEADLINE_SLACK_MS)
+            .apply { if (requireCharging) setRequiresCharging(true) }
+            .build()
+        val ok = runCatching { scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS }.getOrDefault(false)
+        if (!ok) DebugLog.add(context, "poll job schedule FAILED")
+        prefs.edit()
+            .putInt(KEY_POLL_TOGGLE, 1 - toggle)
+            .putLong(KEY_POLL_DUE, SystemClock.elapsedRealtime() + delayMs)
+            .apply()
+    }
+
+    private fun cancelPollJobs(context: Context) {
+        val scheduler = context.getSystemService(JobScheduler::class.java)
+        runCatching { scheduler.cancel(POLL_JOB_A) }
+        runCatching { scheduler.cancel(POLL_JOB_B) }
+    }
+
+    /** كم ثانية تأخرت مهمة الفحص عن موعدها (للتشخيص) */
+    fun pollLateSeconds(context: Context): Long {
+        val due = Prefs.of(context).getLong(KEY_POLL_DUE, 0L)
+        return if (due == 0L) -1 else (SystemClock.elapsedRealtime() - due) / 1000
+    }
+
+    /** كم ثانية تأخر منبّه التحديث عن موعده (للتشخيص) */
+    fun refreshLateSeconds(context: Context): Long {
+        val due = Prefs.of(context).getLong(KEY_REFRESH_DUE, 0L)
+        return if (due == 0L) -1 else (System.currentTimeMillis() - due) / 1000
     }
 
     private fun scheduleJob(context: Context) {
@@ -251,6 +308,7 @@ object ChargeScheduler {
     private fun scheduleRefreshAlarm(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val triggerAt = System.currentTimeMillis() + REFRESH_INTERVAL_MS
+        Prefs.of(context).edit().putLong(KEY_REFRESH_DUE, triggerAt).apply()
         val showIntent = PendingIntent.getActivity(
             context,
             REFRESH_REQUEST,
