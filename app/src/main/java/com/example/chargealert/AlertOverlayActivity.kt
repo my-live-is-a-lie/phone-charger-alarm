@@ -67,8 +67,7 @@ class AlertOverlayActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DebugLog.add(this, "overlay onCreate ${DebugLog.screenState(this)}")
-        AlarmPlayer.stop(this) // الشاشة تشغّل صوتها بنفسها فلا نكرر الصوت
+        DebugLog.i(this, "ALERT", "overlay onCreate ${DebugLog.screenState(this)}")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -105,11 +104,11 @@ class AlertOverlayActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        DebugLog.add(this, "overlay onResume ${DebugLog.screenState(this)}")
+        DebugLog.i(this, "ALERT", "overlay onResume ${DebugLog.screenState(this)}")
     }
 
     override fun onStop() {
-        DebugLog.add(this, "overlay onStop ${DebugLog.screenState(this)}")
+        DebugLog.i(this, "ALERT", "overlay onStop ${DebugLog.screenState(this)}")
         super.onStop()
     }
 
@@ -132,6 +131,12 @@ class AlertOverlayActivity : ComponentActivity() {
                 play()
             }
         }.getOrNull()
+        // نوقف صوت الخدمة فقط إذا بدأ صوت الشاشة فعلاً، حتى لا يصمت التنبيه إذا فشل أحدهما
+        val ownSoundPlaying = runCatching { alertRingtone?.isPlaying == true }.getOrDefault(false)
+        if (ownSoundPlaying) {
+            AlarmPlayer.stop(this)
+        }
+        DebugLog.i(this, "ALERT", "overlay sound playing=$ownSoundPlaying (service sound kept=${!ownSoundPlaying})")
     }
 
     private fun stopAlertSound() {
@@ -146,7 +151,7 @@ class AlertOverlayActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        DebugLog.add(this, "overlay onDestroy")
+        DebugLog.i(this, "ALERT", "overlay onDestroy")
         shown = false
         runCatching { if (screenLock?.isHeld == true) screenLock?.release() }
         screenLock = null

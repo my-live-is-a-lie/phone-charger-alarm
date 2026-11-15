@@ -10,6 +10,27 @@ chosen battery level), so you can unplug it on time.
 - Quick Settings tile to toggle monitoring
 - Runs after reboot
 
+## Reliability while the screen is off
+
+While the charger is connected and the target level has not been reached, the monitor
+service holds a partial wake lock and checks the battery every 10 seconds on its own
+thread. Without it Android (and OEM layers such as XOS/HiOS) suspend the CPU and freeze the
+app when the screen turns off, so the alert only fired after the screen was woken manually.
+The 90 s alarm-clock alarm and the JobScheduler poll remain as watchdogs: they only fire if
+the heartbeat stops.
+
+## Advanced diagnostics
+
+Open it from the main screen ("فتح التشخيص المتقدم"):
+
+- live checklist (permissions, battery optimisation, standby bucket, DND, alarm volume, heartbeat health, pending jobs/alarms) with a fix button for each problem
+- persistent rotating event log (survives process death; the `pid` column changes when the process restarts)
+- process-death forensics: the reason Android killed the previous process (`EXIT` lines) and crash stack traces (`CRASH`)
+- heartbeat gap detection (`BEAT GAP`): shows when the CPU/process was suspended
+- screen/power/Doze broadcasts (`SYS`) and every alert step (`ALERT`, `SOUND`)
+- "alert after 30 s" self-test to check delivery with the screen off
+- full report: copy to clipboard or share as a file
+
 ## Build
 
 Release APKs are built automatically on GitHub Actions. Download the latest
