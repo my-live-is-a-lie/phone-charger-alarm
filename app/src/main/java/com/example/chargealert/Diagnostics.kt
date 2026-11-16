@@ -43,7 +43,7 @@ object DiagStats {
 
 enum class CheckStatus { OK, WARN, BAD, INFO }
 
-enum class Fix { BATTERY_OPT, OVERLAY, FULL_SCREEN, NOTIFICATIONS, APP_DETAILS }
+enum class Fix { BATTERY_OPT, OVERLAY, FULL_SCREEN, NOTIFICATIONS, EXACT_ALARM, APP_DETAILS }
 
 data class Check(
     val title: String,
@@ -203,6 +203,17 @@ object Diagnostics {
             if (alertCh == null) "لم تُنشأ بعد (تُنشأ عند أول تنبيه)" else "الأهمية = $chImp (المطلوب 4 فأعلى لظهور الشاشة الكاملة)",
             if (alertCh != null && (chImp ?: 4) < NotificationManager.IMPORTANCE_HIGH) Fix.NOTIFICATIONS else null
         )
+
+        if (Build.VERSION.SDK_INT >= 31) {
+            val canExact = Permissions.canScheduleExactAlarms(context)
+            out += Check(
+                "إذن المنبهات والتذكيرات (Exact Alarms)",
+                if (canExact) CheckStatus.OK else CheckStatus.BAD,
+                if (canExact) "مسموح — يتيح إيقاظ الشاشة وإطلاق التنبيه بدقة أثناء الشحن والشاشة مغلقة"
+                else "غير مسموح: لن يتمكن التطبيق من إيقاظ الشاشة بالموعد الدقيق أثناء الشحن",
+                if (canExact) null else Fix.EXACT_ALARM
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= 34) {
             val fsi = nm.canUseFullScreenIntent()
@@ -445,6 +456,10 @@ object Diagnostics {
     // ------------------------------------------------------------------ actions
 
     fun openFix(context: Context, fix: Fix) {
+        if (fix == Fix.EXACT_ALARM) {
+            Permissions.requestExactAlarm(context)
+            return
+        }
         val pkg = Uri.parse("package:${context.packageName}")
         val intent = when (fix) {
             Fix.BATTERY_OPT -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
@@ -454,6 +469,7 @@ object Diagnostics {
                 else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
             Fix.NOTIFICATIONS ->
                 Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            Fix.EXACT_ALARM -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
             Fix.APP_DETAILS -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(intent) }

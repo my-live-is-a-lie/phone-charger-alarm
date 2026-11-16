@@ -22,7 +22,7 @@
     <string name="tools_title">أدوات</string>
     <string name="test_alert">اختبار التنبيه</string>
     <string name="battery_opt">استثناء من تحسين البطارية</string>
-    <string name="exact_alarm_permission">السماح بالتنبيهات الدقيقة (مهم لوصول التنبيه في وقته)</string>
+    <string name="exact_alarm_permission">السماح بالمنبهات والتذكيرات (مهم لإيقاظ الشاشة أثناء الشحن)</string>
     <string name="full_screen_permission">السماح بعرض التنبيه على الشاشة المقفلة</string>
     <string name="add_tile">إضافة البلاطة إلى الإعدادات السريعة</string>
     <string name="overlay_permission_action">السماح بالظهور فوق التطبيقات الأخرى</string>

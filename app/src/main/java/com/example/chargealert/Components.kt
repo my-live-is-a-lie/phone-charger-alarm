@@ -107,7 +107,7 @@ fun rememberBatteryInfo(): State<BatteryInfo> {
     return state
 }
 
-/** يطلب إذن الإشعارات (أندرويد 13+) قبل تفعيل المراقبة */
+/** يطلب الأذونات الضرورية (الإشعارات، المنبهات والتذكيرات، العرض على الشاشة المقفلة) قبل تفعيل المراقبة */
 @Composable
 fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
     val context = LocalContext.current
@@ -115,15 +115,9 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            val fullScreenAllowed = Build.VERSION.SDK_INT < 34 ||
-                context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
             when {
-                !fullScreenAllowed -> runCatching {
-                    context.startActivity(
-                        Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                            .setData(Uri.parse("package:${context.packageName}"))
-                    )
-                }
+                !Permissions.canScheduleExactAlarms(context) -> Permissions.requestExactAlarm(context)
+                !Permissions.canUseFullScreenIntent(context) -> Permissions.requestFullScreenIntent(context)
                 else -> settings.updateEnabled(true)
             }
         }
@@ -139,24 +133,10 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
                 settings.updateEnabled(false)
             } else if (needsPermission) {
                 launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else if (Build.VERSION.SDK_INT >= 31 &&
-                !context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
-            ) {
-                runCatching {
-                    context.startActivity(
-                        Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                            .setData(Uri.parse("package:${context.packageName}"))
-                    )
-                }
-            } else if (Build.VERSION.SDK_INT >= 34 &&
-                !context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
-            ) {
-                runCatching {
-                    context.startActivity(
-                        Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                            .setData(Uri.parse("package:${context.packageName}"))
-                    )
-                }
+            } else if (!Permissions.canScheduleExactAlarms(context)) {
+                Permissions.requestExactAlarm(context)
+            } else if (!Permissions.canUseFullScreenIntent(context)) {
+                Permissions.requestFullScreenIntent(context)
             } else {
                 settings.updateEnabled(true)
             }

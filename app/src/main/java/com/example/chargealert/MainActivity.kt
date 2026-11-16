@@ -61,26 +61,28 @@ class MainActivity : ComponentActivity() {
 private fun MainScreen() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    var overlayAllowed by remember { mutableStateOf(Permissions.canDrawOverlays(context)) }
     var tileAdded by remember { mutableStateOf(Prefs.isTileAdded(context)) }
     var batteryOptimizationExempt by remember {
-        mutableStateOf(context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName))
+        mutableStateOf(Permissions.isIgnoringBatteryOptimizations(context))
+    }
+    var exactAlarmAllowed by remember {
+        mutableStateOf(Permissions.canScheduleExactAlarms(context))
     }
     var fullScreenIntentAllowed by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < 34 || context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent())
+        mutableStateOf(Permissions.canUseFullScreenIntent(context))
     }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 DebugLog.add(context, "main resumed ${DebugLog.screenState(context)}")
-                overlayAllowed = Settings.canDrawOverlays(context)
+                overlayAllowed = Permissions.canDrawOverlays(context)
                 tileAdded = Prefs.isTileAdded(context)
-                batteryOptimizationExempt = context.getSystemService(PowerManager::class.java)
-                    .isIgnoringBatteryOptimizations(context.packageName)
+                batteryOptimizationExempt = Permissions.isIgnoringBatteryOptimizations(context)
+                exactAlarmAllowed = Permissions.canScheduleExactAlarms(context)
+                fullScreenIntentAllowed = Permissions.canUseFullScreenIntent(context)
                 if (Prefs.isEnabled(context)) ChargeScheduler.start(context)
-                fullScreenIntentAllowed = Build.VERSION.SDK_INT < 34 ||
-                    context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -154,23 +156,23 @@ private fun MainScreen() {
 
             DebugLogCard()
 
+            if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAllowed) {
+                FilledTonalButton(
+                    onClick = { Permissions.requestExactAlarm(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.exact_alarm_permission)) }
+            }
+
             if (Build.VERSION.SDK_INT >= 34 && !fullScreenIntentAllowed) {
                 FilledTonalButton(
-                    onClick = {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT)
-                                    .setData(Uri.parse("package:${context.packageName}"))
-                            )
-                        }
-                    },
+                    onClick = { Permissions.requestFullScreenIntent(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.full_screen_permission)) }
             }
 
             if (!batteryOptimizationExempt) {
                 FilledTonalButton(
-                    onClick = { requestIgnoreBatteryOptimizations(context) },
+                    onClick = { Permissions.requestIgnoreBatteryOptimizations(context) },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.battery_opt)) }
             }
@@ -178,23 +180,8 @@ private fun MainScreen() {
     }
 }
 
-private fun requestIgnoreBatteryOptimizations(context: Context) {
-    val pm = context.getSystemService(PowerManager::class.java)
-    if (pm.isIgnoringBatteryOptimizations(context.packageName)) return
-    val intent = Intent(
-        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-        Uri.parse("package:${context.packageName}")
-    )
-    runCatching { context.startActivity(intent) }
-}
-
 private fun requestOverlayPermission(context: Context) {
-    if (Settings.canDrawOverlays(context)) return
-    val intent = Intent(
-        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-        Uri.parse("package:${context.packageName}")
-    )
-    runCatching { context.startActivity(intent) }
+    Permissions.requestOverlay(context)
 }
 
 private fun requestAddTile(context: Context) {
