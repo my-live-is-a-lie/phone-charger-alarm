@@ -5,7 +5,6 @@ package com.example.chargealert
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
@@ -76,7 +75,6 @@ private fun MainScreen() {
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                DebugLog.add(context, "main resumed ${DebugLog.screenState(context)}")
                 overlayAllowed = Permissions.canDrawOverlays(context)
                 tileAdded = Prefs.isTileAdded(context)
                 batteryOptimizationExempt = Permissions.isIgnoringBatteryOptimizations(context)
@@ -153,9 +151,6 @@ private fun MainScreen() {
                     }
                 }
             }
-
-            DebugLogCard()
-
             if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAllowed) {
                 FilledTonalButton(
                     onClick = { Permissions.requestExactAlarm(context) },

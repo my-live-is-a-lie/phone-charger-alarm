@@ -9,15 +9,9 @@ import android.app.job.JobService
  */
 class PollJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
-        pollCount++
-        DebugLog.add(this, "poll job #$pollCount fired late=${ChargeScheduler.pollLateSeconds(this)}s")
         ChargeScheduler.check(this)
         return false
     }
 
     override fun onStopJob(params: JobParameters): Boolean = false
-
-    companion object {
-        private var pollCount = 0
-    }
 }

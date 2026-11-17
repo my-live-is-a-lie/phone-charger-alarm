@@ -19,18 +19,6 @@ app when the screen turns off, so the alert only fired after the screen was woke
 The 90 s alarm-clock alarm and the JobScheduler poll remain as watchdogs: they only fire if
 the heartbeat stops.
 
-## Advanced diagnostics
-
-Open it from the main screen ("فتح التشخيص المتقدم"):
-
-- live checklist (permissions, battery optimisation, standby bucket, DND, alarm volume, heartbeat health, pending jobs/alarms) with a fix button for each problem
-- persistent rotating event log (survives process death; the `pid` column changes when the process restarts)
-- process-death forensics: the reason Android killed the previous process (`EXIT` lines) and crash stack traces (`CRASH`)
-- heartbeat gap detection (`BEAT GAP`): shows when the CPU/process was suspended
-- screen/power/Doze broadcasts (`SYS`) and every alert step (`ALERT`, `SOUND`)
-- "alert after 30 s" self-test to check delivery with the screen off
-- full report: copy to clipboard or share as a file
-
 ## Build
 
 Release APKs are built automatically on GitHub Actions. Download the latest

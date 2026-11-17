@@ -38,7 +38,7 @@ object AlarmPlayer {
         player = tryPlay(app, custom, "custom") ?: tryPlay(app, default, "default")
 
         if (player == null) {
-            DebugLog.e(app, "SOUND", "alarm sound FAILED to start (custom=$custom default=$default)")
+            
             return
         }
 
@@ -55,10 +55,7 @@ object AlarmPlayer {
         }
         handler.postDelayed({ stop(app) }, MAX_DURATION_MS)
         val am = app.getSystemService(AudioManager::class.java)
-        DebugLog.i(
-            app, "SOUND",
-            "alarm sound started playing=${runCatching { player?.isPlaying }.getOrNull()} alarmVol=${am.getStreamVolume(AudioManager.STREAM_ALARM)}/${am.getStreamMaxVolume(AudioManager.STREAM_ALARM)}"
-        )
+        
     }
 
     private fun tryPlay(context: Context, uri: Uri?, label: String): MediaPlayer? {
@@ -77,7 +74,7 @@ object AlarmPlayer {
             mp.start()
             mp
         } catch (e: Exception) {
-            DebugLog.w(context, "SOUND", "tryPlay($label) failed: ${e.javaClass.simpleName}: ${e.message}")
+            
             runCatching { mp.release() }
             null
         }
@@ -93,7 +90,7 @@ object AlarmPlayer {
             runCatching { mp.release() }
             player = null
             runCatching { app.getSystemService(Vibrator::class.java).cancel() }
-            DebugLog.i(app, "SOUND", "alarm sound stopped")
+            
         }
         wakeLock?.let { lock -> runCatching { if (lock.isHeld) lock.release() } }
         wakeLock = null

@@ -61,13 +61,13 @@ class AlertOverlayActivity : ComponentActivity() {
     private var screenLock: PowerManager.WakeLock? = null
 
     companion object {
-        /** هل شاشة التنبيه مفتوحة الآن؟ (للتشخيص في السجل فقط) */
+        /** هل شاشة التنبيه مفتوحة الآن؟ */
         @Volatile var shown = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        DebugLog.i(this, "ALERT", "overlay onCreate ${DebugLog.screenState(this)}")
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -104,11 +104,11 @@ class AlertOverlayActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        DebugLog.i(this, "ALERT", "overlay onResume ${DebugLog.screenState(this)}")
+        
     }
 
     override fun onStop() {
-        DebugLog.i(this, "ALERT", "overlay onStop ${DebugLog.screenState(this)}")
+        
         super.onStop()
     }
 
@@ -136,7 +136,7 @@ class AlertOverlayActivity : ComponentActivity() {
         if (ownSoundPlaying) {
             AlarmPlayer.stop(this)
         }
-        DebugLog.i(this, "ALERT", "overlay sound playing=$ownSoundPlaying (service sound kept=${!ownSoundPlaying})")
+        
     }
 
     private fun stopAlertSound() {
@@ -151,7 +151,7 @@ class AlertOverlayActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        DebugLog.i(this, "ALERT", "overlay onDestroy")
+        
         shown = false
         runCatching { if (screenLock?.isHeld == true) screenLock?.release() }
         screenLock = null

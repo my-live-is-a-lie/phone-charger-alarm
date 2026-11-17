@@ -71,7 +71,7 @@ object ChargeScheduler {
     @Synchronized
     fun onPlugged(context: Context) {
         if (!Prefs.isEnabled(context)) return
-        DebugLog.i(context, "SCHED", "onPlugged ${Diagnostics.oneLine(context)}")
+        
         val info = BatteryUtils.read(context)
         if (!info.plugged) {
             // تذبذب عابر لحظة التوصيل: نعيد جدولة المهمة وننتظر
@@ -102,7 +102,7 @@ object ChargeScheduler {
         val now = SystemClock.elapsedRealtime()
         if (unplugSeenAt == 0L) {
             unplugSeenAt = now
-            DebugLog.add(context, "unplug suspected, confirming in ${UNPLUG_CONFIRM_MS}ms")
+            
             val app = context.applicationContext
             mainHandler.postDelayed({ check(app) }, UNPLUG_CONFIRM_MS + 300)
             // نسخة احتياطية عبر JobScheduler إذا جُمّدت العملية قبل تنفيذ الفحص المؤجل
@@ -176,12 +176,12 @@ object ChargeScheduler {
         val session = Prefs.Session(now, info.percent, now, info.percent)
         Prefs.setSession(context, session)
         Prefs.setAlertedAt(context, 0L)
-        DebugLog.i(context, "SCHED", "session begin pct=${info.percent} threshold=${Prefs.threshold(context)} | ${Diagnostics.oneLine(context)}")
+        
         process(context, info, session, now, updateLast = false)
     }
 
     private fun endSession(context: Context) {
-        DebugLog.i(context, "SCHED", "session end (not charging) | ${Diagnostics.oneLine(context)}")
+        
         unplugSeenAt = 0L
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
@@ -203,7 +203,7 @@ object ChargeScheduler {
         if (info.percent >= threshold) {
             if (Prefs.alertedAt(context) == 0L) {
                 Prefs.setAlertedAt(context, now)
-                DebugLog.i(context, "SCHED", "THRESHOLD REACHED pct=${info.percent} threshold=$threshold -> alert | ${Diagnostics.oneLine(context)}")
+                
                 Notifications.alert(context, info.percent)
             }
         } else if (Prefs.alertedAt(context) != 0L) {
@@ -253,7 +253,7 @@ object ChargeScheduler {
             .apply { if (requireCharging) setRequiresCharging(true) }
             .build()
         val ok = runCatching { scheduler.schedule(job) == JobScheduler.RESULT_SUCCESS }.getOrDefault(false)
-        if (!ok) DebugLog.add(context, "poll job schedule FAILED")
+
         prefs.edit()
             .putInt(KEY_POLL_TOGGLE, 1 - toggle)
             .putLong(KEY_POLL_DUE, SystemClock.elapsedRealtime() + delayMs)
@@ -345,7 +345,7 @@ object ChargeScheduler {
             // Fallback: best-effort inexact alarm (no exact-alarm permission needed).
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, refreshIntent(context))
         }
-        DebugLog.add(context, "next refresh in 90s type=${if (ok) "alarmClock" else "inexact"}")
+        
     }
 
     private fun cancelRefreshAlarm(context: Context) {
@@ -379,14 +379,14 @@ object ChargeScheduler {
                     pendingIntent
                 )
             }.isSuccess
-            DebugLog.add(context, "next alarm in ${delay / 1000}s type=alarmClock ok=$ok")
+            
             if (ok) return
         }
 
         val triggerAt = SystemClock.elapsedRealtime() + delay
         val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
             alarmManager.canScheduleExactAlarms()
-        DebugLog.add(context, "next alarm in ${delay / 1000}s type=${if (exact) "exact" else "inexact"}")
+        
         if (exact) {
             alarmManager.setExactAndAllowWhileIdle(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
