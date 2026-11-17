@@ -5,7 +5,6 @@ package com.example.chargealert
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
@@ -153,9 +152,6 @@ private fun MainScreen() {
                     }
                 }
             }
-
-            DebugLogCard()
-
             if (Build.VERSION.SDK_INT >= 31 && !exactAlarmAllowed) {
                 FilledTonalButton(
                     onClick = { Permissions.requestExactAlarm(context) },

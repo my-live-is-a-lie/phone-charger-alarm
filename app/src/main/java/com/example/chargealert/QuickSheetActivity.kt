@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 class QuickSheetActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
-        DebugLog.add(this, "sheet resumed ${DebugLog.screenState(this)}")
+        
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

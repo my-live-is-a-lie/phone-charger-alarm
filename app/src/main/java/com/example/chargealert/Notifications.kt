@@ -69,7 +69,7 @@ object Notifications {
         try {
             block()
         } catch (t: Throwable) {
-            DebugLog.e(context, "ALERT", "step '$name' FAILED", t)
+            
         }
     }
 
@@ -78,10 +78,7 @@ object Notifications {
         alertActive = true
         val generation = retryGeneration.incrementAndGet()
         DiagStats.lastAlertAtWall = System.currentTimeMillis()
-        DebugLog.i(
-            app, "ALERT",
-            "alert() begin pct=$percent thread=${Thread.currentThread().name} ${DebugLog.screenState(app)}"
-        )
+        
 
         // 1) الصوت أولاً: حتى لو فشلت أي خطوة لاحقة (إشعار، شاشة) يبقى التنبيه مسموعاً.
         step(app, "sound") { AlarmPlayer.start(app) }
@@ -105,17 +102,12 @@ object Notifications {
         val vol = am.getStreamVolume(AudioManager.STREAM_ALARM)
         val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
         val dnd = nm.currentInterruptionFilter
-        DebugLog.i(
-            app, "ALERT",
-            "env: notifsEnabled=${nm.areNotificationsEnabled()} channelImportance=$importance overlay=${Settings.canDrawOverlays(app)} " +
-                "fullScreenIntent=$fsi alarmVol=$vol/$max dnd=$dnd ringer=${am.ringerMode}"
-        )
-        if (vol == 0) DebugLog.w(app, "ALERT", "alarm stream volume is 0 -> the alert will be SILENT")
+        
+
         if (dnd == NotificationManager.INTERRUPTION_FILTER_NONE) {
-            DebugLog.w(app, "ALERT", "Do Not Disturb = total silence -> alarms are blocked")
+            
         }
-        if (!nm.areNotificationsEnabled()) DebugLog.w(app, "ALERT", "notifications are disabled for the app")
-        if (!fsi) DebugLog.w(app, "ALERT", "full-screen intent NOT allowed -> the screen will not turn on by itself")
+
     }
 
     private fun postAlertNotification(app: Context, percent: Int) {
@@ -140,12 +132,12 @@ object Notifications {
         nm.cancel(ID_ALERT)
         nm.notify(ID_ALERT, notification)
         val posted = nm.activeNotifications.any { it.id == ID_ALERT }
-        DebugLog.i(app, "ALERT", "alert notification posted (visibleInShade=$posted)")
+        
     }
 
     private fun launchOverlay(app: Context, percent: Int, why: String) {
         if (!Settings.canDrawOverlays(app)) {
-            DebugLog.w(app, "ALERT", "overlay permission missing -> relying on the full-screen notification ($why)")
+            
             return
         }
         try {
@@ -154,9 +146,9 @@ object Notifications {
                     .putExtra(EXTRA_PERCENT, percent)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             )
-            DebugLog.i(app, "ALERT", "overlay startActivity called ($why)")
+            
         } catch (t: Throwable) {
-            DebugLog.e(app, "ALERT", "overlay startActivity FAILED ($why)", t)
+            
         }
     }
 
@@ -165,17 +157,14 @@ object Notifications {
             override fun run() {
                 if (!alertActive || retryGeneration.get() != generation) return
                 if (AlertOverlayActivity.shown) {
-                    DebugLog.i(app, "ALERT", "retry: overlay is showing, loop stops")
+                    
                     return
                 }
                 val pm = app.getSystemService(PowerManager::class.java)
                 if (!pm.isInteractive) wakeScreen(app)
                 step(app, "retry-sound") { AlarmPlayer.start(app) }
                 launchOverlay(app, percent, "retry")
-                DebugLog.i(
-                    app, "ALERT",
-                    "retry +5s: overlayShown=${AlertOverlayActivity.shown} soundPlaying=${AlarmPlayer.isPlaying} ${DebugLog.screenState(app)}"
-                )
+                
                 mainHandler.postDelayed(this, RETRY_MS)
             }
         }, RETRY_MS)
@@ -194,8 +183,8 @@ object Notifications {
                 "chargealert:launching"
             )
             lock.acquire(5_000L)
-            DebugLog.i(context, "ALERT", "screen wake requested (dim)")
-        }.onFailure { DebugLog.e(context, "ALERT", "screen wake FAILED", it) }
+            
+        }.onFailure {  }
     }
 
     fun cancelAlert(context: Context) {
