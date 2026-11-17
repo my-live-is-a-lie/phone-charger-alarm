@@ -28,6 +28,7 @@
     <string name="alert_sound_title">نغمة التنبيه</string>
     <string name="alert_sound_default">نغمة المنبه الافتراضية</string>
     <string name="alert_sound_picker_title">اختر نغمة تنبيه الشحن</string>
-    <string name="choose_alert_sound">اختيار نغمة التنبيه</string>
+    <string name="choose_alert_sound">اختيار نغمة تنبيه الشحن</string>
     <string name="alert_stop">إيقاف</string>
+    <string name="open_app">فتح التطبيق</string>
 </resources>
