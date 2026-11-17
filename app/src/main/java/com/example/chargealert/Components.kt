@@ -149,6 +149,7 @@ fun rememberToggleAction(settings: SettingsState): (Boolean) -> Unit {
 fun AlertSoundSettings() {
     val context = LocalContext.current
     var selectedUri by remember { mutableStateOf(Prefs.alertSoundUri(context)) }
+    var alertVolume by remember { mutableIntStateOf(Prefs.alertVolume(context)) }
     val currentUri = selectedUri?.let { Uri.parse(it) }
         ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
     val currentName = remember(selectedUri) {
@@ -188,6 +189,37 @@ fun AlertSoundSettings() {
                 text = currentName,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(R.string.alert_volume_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Slider(
+                    value = alertVolume.toFloat(),
+                    onValueChange = { value ->
+                        alertVolume = value.roundToInt()
+                        Prefs.setAlertVolume(context, alertVolume)
+                        AlarmPlayer.updateVolume(context, alertVolume)
+                    },
+                    valueRange = 0f..100f,
+                    steps = 99,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = stringResource(R.string.percent, alertVolume),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+            }
+            Text(
+                text = stringResource(R.string.alert_volume_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             OutlinedButton(
                 onClick = {

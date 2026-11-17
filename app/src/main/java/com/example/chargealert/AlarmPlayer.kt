@@ -38,9 +38,9 @@ object AlarmPlayer {
         player = tryPlay(app, custom, "custom") ?: tryPlay(app, default, "default")
 
         if (player == null) {
-            
             return
         }
+        player?.setVolume(Prefs.alertVolume(app) / 100f, Prefs.alertVolume(app) / 100f)
 
         runCatching {
             val lock = app.getSystemService(PowerManager::class.java)
@@ -56,6 +56,12 @@ object AlarmPlayer {
         handler.postDelayed({ stop(app) }, MAX_DURATION_MS)
         val am = app.getSystemService(AudioManager::class.java)
         
+    }
+
+    @Synchronized
+    fun updateVolume(context: Context, value: Int) {
+        val volume = value.coerceIn(0, 100) / 100f
+        runCatching { player?.setVolume(volume, volume) }
     }
 
     private fun tryPlay(context: Context, uri: Uri?, label: String): MediaPlayer? {
