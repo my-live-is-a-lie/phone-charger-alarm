@@ -75,7 +75,6 @@ private fun MainScreen() {
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                DebugLog.add(context, "main resumed ${DebugLog.screenState(context)}")
                 overlayAllowed = Permissions.canDrawOverlays(context)
                 tileAdded = Prefs.isTileAdded(context)
                 batteryOptimizationExempt = Permissions.isIgnoringBatteryOptimizations(context)

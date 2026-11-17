@@ -77,7 +77,6 @@ object Notifications {
         val app = context.applicationContext
         alertActive = true
         val generation = retryGeneration.incrementAndGet()
-        DiagStats.lastAlertAtWall = System.currentTimeMillis()
         
 
         // 1) الصوت أولاً: حتى لو فشلت أي خطوة لاحقة (إشعار، شاشة) يبقى التنبيه مسموعاً.
