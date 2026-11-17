@@ -32,7 +32,8 @@ class ChargeTileService : TileService() {
         }
         val needsPermission = Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        if (needsPermission) {
+        val needsExactAlarm = !Permissions.canScheduleExactAlarms(this)
+        if (needsPermission || needsExactAlarm) {
             openSheet()
             return
         }

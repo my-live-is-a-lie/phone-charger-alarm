@@ -31,10 +31,13 @@ object ChargeScheduler {
     private const val KEY_POLL_TOGGLE = "poll_toggle"
     private const val KEY_POLL_DUE = "poll_due_elapsed"
     private const val KEY_REFRESH_DUE = "refresh_due_wall"
+    private const val REFRESH_RESCHEDULE_BELOW_MS = 30_000L
+    private const val POLL_RESCHEDULE_BELOW_MS = 10_000L
 
     @Volatile private var unplugSeenAt = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Synchronized
     fun start(context: Context) {
         if (!Prefs.isEnabled(context)) return
         // الخدمة تعمل طوال فترة تفعيل المراقبة، موصولاً الشاحن أم لا
@@ -53,6 +56,7 @@ object ChargeScheduler {
         }
     }
 
+    @Synchronized
     fun stop(context: Context) {
         BatteryMonitorService.stop(context)
         context.getSystemService(JobScheduler::class.java).cancel(JOB_ID)
@@ -64,8 +68,10 @@ object ChargeScheduler {
         Notifications.cancelAlert(context)
     }
 
+    @Synchronized
     fun onPlugged(context: Context) {
         if (!Prefs.isEnabled(context)) return
+        DebugLog.i(context, "SCHED", "onPlugged ${Diagnostics.oneLine(context)}")
         val info = BatteryUtils.read(context)
         if (!info.plugged) {
             // تذبذب عابر لحظة التوصيل: نعيد جدولة المهمة وننتظر
@@ -86,6 +92,7 @@ object ChargeScheduler {
      * إلا إذا استمر 2.5 ثانية. بدون انتظار أو تجميد للواجهة: أول ملاحظة تسجّل الوقت وتجدول فحصاً
      * بعد قليل، والفحص التالي يحسم الأمر.
      */
+    @Synchronized
     fun isUnplugConfirmed(context: Context): Boolean {
         val info = BatteryUtils.read(context)
         if (info.plugged) {
@@ -105,10 +112,12 @@ object ChargeScheduler {
         return now - unplugSeenAt >= UNPLUG_CONFIRM_MS
     }
 
+    @Synchronized
     fun onUnplugged(context: Context) {
         if (Prefs.isEnabled(context)) endSession(context)
     }
 
+    @Synchronized
     fun onThresholdChanged(context: Context) {
         if (!Prefs.isEnabled(context)) return
         val info = BatteryUtils.read(context)
@@ -128,6 +137,7 @@ object ChargeScheduler {
         process(context, info, session, now, updateLast = false)
     }
 
+    @Synchronized
     fun check(context: Context) {
         if (!Prefs.isEnabled(context)) {
             stop(context)
@@ -166,12 +176,12 @@ object ChargeScheduler {
         val session = Prefs.Session(now, info.percent, now, info.percent)
         Prefs.setSession(context, session)
         Prefs.setAlertedAt(context, 0L)
-        DebugLog.add(context, "session begin pct=${info.percent} threshold=${Prefs.threshold(context)}")
+        DebugLog.i(context, "SCHED", "session begin pct=${info.percent} threshold=${Prefs.threshold(context)} | ${Diagnostics.oneLine(context)}")
         process(context, info, session, now, updateLast = false)
     }
 
     private fun endSession(context: Context) {
-        DebugLog.add(context, "session end (not charging)")
+        DebugLog.i(context, "SCHED", "session end (not charging) | ${Diagnostics.oneLine(context)}")
         unplugSeenAt = 0L
         Prefs.setSession(context, Prefs.Session.EMPTY)
         Prefs.setAlertedAt(context, 0L)
@@ -193,7 +203,7 @@ object ChargeScheduler {
         if (info.percent >= threshold) {
             if (Prefs.alertedAt(context) == 0L) {
                 Prefs.setAlertedAt(context, now)
-                DebugLog.add(context, "THRESHOLD REACHED pct=${info.percent} threshold=$threshold -> alert")
+                DebugLog.i(context, "SCHED", "THRESHOLD REACHED pct=${info.percent} threshold=$threshold -> alert | ${Diagnostics.oneLine(context)}")
                 Notifications.alert(context, info.percent)
             }
         } else if (Prefs.alertedAt(context) != 0L) {
@@ -208,14 +218,23 @@ object ChargeScheduler {
         // fires, the service re-registers the BATTERY_CHANGED receiver, which makes the
         // system deliver the current battery state immediately, so the threshold is caught
         // even if broadcasts stop arriving with the screen off.
+        // نبضة الخدمة تعمل كل 10 ثوانٍ وتستدعي check() في كل مرة، فلا نعيد الجدولة إلا عند اقتراب
+        // موعد المنبّه/المهمة السابقة. بهذا يعمل المنبّه والمهمة كحارس احتياطي: لا ينطلقان فعلياً
+        // إلا إذا توقفت النبضات (العملية قُتلت أو جُمّدت).
+        val prefs = Prefs.of(context)
+        // remaining خارج النطاق المنطقي (بعد إعادة تشغيل الهاتف مثلاً) يعني أن القيمة قديمة فنعيد الجدولة
+        val pollRemaining = prefs.getLong(KEY_POLL_DUE, 0L) - SystemClock.elapsedRealtime()
+        val pollSoon = pollRemaining < POLL_RESCHEDULE_BELOW_MS || pollRemaining > 120_000L
         if (Prefs.alertedAt(context) == 0L) {
-            scheduleRefreshAlarm(context)
-            schedulePollJob(context, POLL_DELAY_MS)
+            val refreshRemaining = prefs.getLong(KEY_REFRESH_DUE, 0L) - now
+            val refreshSoon = refreshRemaining < REFRESH_RESCHEDULE_BELOW_MS || refreshRemaining > 180_000L
+            if (refreshSoon) scheduleRefreshAlarm(context)
+            if (pollSoon) schedulePollJob(context, POLL_DELAY_MS)
         } else {
             // Alert already sent: no more refresh needed.
-            cancelRefreshAlarm(context)
+            if (prefs.getLong(KEY_REFRESH_DUE, 0L) != 0L) cancelRefreshAlarm(context)
             // فحص أبطأ فقط لاكتشاف الفصل وإيقاف صوت التنبيه
-            schedulePollJob(context, POLL_AFTER_ALERT_DELAY_MS)
+            if (pollSoon) schedulePollJob(context, POLL_AFTER_ALERT_DELAY_MS)
         }
     }
 
@@ -245,6 +264,7 @@ object ChargeScheduler {
         val scheduler = context.getSystemService(JobScheduler::class.java)
         runCatching { scheduler.cancel(POLL_JOB_A) }
         runCatching { scheduler.cancel(POLL_JOB_B) }
+        Prefs.of(context).edit().putLong(KEY_POLL_DUE, 0L).apply()
     }
 
     /** كم ثانية تأخرت مهمة الفحص عن موعدها (للتشخيص) */
@@ -330,6 +350,7 @@ object ChargeScheduler {
 
     private fun cancelRefreshAlarm(context: Context) {
         context.getSystemService(AlarmManager::class.java).cancel(refreshIntent(context))
+        Prefs.of(context).edit().putLong(KEY_REFRESH_DUE, 0L).apply()
     }
 
     private fun scheduleAlarm(

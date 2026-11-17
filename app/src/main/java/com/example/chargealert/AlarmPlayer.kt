@@ -2,6 +2,7 @@ package com.example.chargealert
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -23,6 +24,9 @@ object AlarmPlayer {
     private var player: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    val isPlaying: Boolean
+        get() = synchronized(this) { runCatching { player?.isPlaying == true }.getOrDefault(false) }
+
     @Synchronized
     fun start(context: Context) {
         val app = context.applicationContext
@@ -31,10 +35,10 @@ object AlarmPlayer {
         val custom = Prefs.alertSoundUri(app)?.let { Uri.parse(it) }
         val default = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        player = tryPlay(app, custom) ?: tryPlay(app, default)
+        player = tryPlay(app, custom, "custom") ?: tryPlay(app, default, "default")
 
         if (player == null) {
-            DebugLog.add(app, "alarm sound FAILED to start")
+            DebugLog.e(app, "SOUND", "alarm sound FAILED to start (custom=$custom default=$default)")
             return
         }
 
@@ -50,10 +54,14 @@ object AlarmPlayer {
                 .vibrate(VibrationEffect.createWaveform(longArrayOf(0, 600, 400), 0))
         }
         handler.postDelayed({ stop(app) }, MAX_DURATION_MS)
-        DebugLog.add(app, "alarm sound started")
+        val am = app.getSystemService(AudioManager::class.java)
+        DebugLog.i(
+            app, "SOUND",
+            "alarm sound started playing=${runCatching { player?.isPlaying }.getOrNull()} alarmVol=${am.getStreamVolume(AudioManager.STREAM_ALARM)}/${am.getStreamMaxVolume(AudioManager.STREAM_ALARM)}"
+        )
     }
 
-    private fun tryPlay(context: Context, uri: Uri?): MediaPlayer? {
+    private fun tryPlay(context: Context, uri: Uri?, label: String): MediaPlayer? {
         if (uri == null) return null
         val mp = MediaPlayer()
         return try {
@@ -69,6 +77,7 @@ object AlarmPlayer {
             mp.start()
             mp
         } catch (e: Exception) {
+            DebugLog.w(context, "SOUND", "tryPlay($label) failed: ${e.javaClass.simpleName}: ${e.message}")
             runCatching { mp.release() }
             null
         }
@@ -84,7 +93,7 @@ object AlarmPlayer {
             runCatching { mp.release() }
             player = null
             runCatching { app.getSystemService(Vibrator::class.java).cancel() }
-            DebugLog.add(app, "alarm sound stopped")
+            DebugLog.i(app, "SOUND", "alarm sound stopped")
         }
         wakeLock?.let { lock -> runCatching { if (lock.isHeld) lock.release() } }
         wakeLock = null
