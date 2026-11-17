@@ -127,10 +127,7 @@ class AlertOverlayActivity : ComponentActivity() {
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    setLooping(true)
-                    setVolume(Prefs.alertVolume(this@AlertOverlayActivity) / 100f)
-                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) setLooping(true)
                 play()
             }
         }.getOrNull()

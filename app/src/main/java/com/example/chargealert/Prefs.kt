@@ -7,7 +7,6 @@ object Prefs {
     const val KEY_ENABLED = "enabled"
     const val KEY_ALERTED_AT = "alerted_at"
     private const val KEY_ALERT_SOUND_URI = "alert_sound_uri"
-    private const val KEY_ALERT_VOLUME = "alert_volume"
     private const val KEY_TILE_ADDED = "quick_settings_tile_added"
     private const val KEY_S_START_TIME = "session_start_time"
     private const val KEY_S_START_PCT = "session_start_pct"
@@ -26,8 +25,6 @@ object Prefs {
     fun setTileAdded(context: Context, value: Boolean) { of(context).edit().putBoolean(KEY_TILE_ADDED, value).apply() }
     fun alertSoundUri(context: Context): String? = of(context).getString(KEY_ALERT_SOUND_URI, null)
     fun setAlertSoundUri(context: Context, value: String?) { of(context).edit().putString(KEY_ALERT_SOUND_URI, value).apply() }
-    fun alertVolume(context: Context): Int = of(context).getInt(KEY_ALERT_VOLUME, 70).coerceIn(0, 100)
-    fun setAlertVolume(context: Context, value: Int) { of(context).edit().putInt(KEY_ALERT_VOLUME, value.coerceIn(0, 100)).apply() }
     fun alertedAt(context: Context): Long = of(context).getLong(KEY_ALERTED_AT, 0L)
     fun setAlertedAt(context: Context, value: Long) { of(context).edit().putLong(KEY_ALERTED_AT, value).apply() }
     fun session(context: Context): Session {
